@@ -14,4 +14,7 @@
 # Pudu robot gateway AIDL interfaces
 -keep class com.pudutech.peanut.tp.** { *; }
 
+# whisper.rn JNI/JSI bridge
+-keep class com.rnwhisper.** { *; }
+
 # Add any project specific keep options here:

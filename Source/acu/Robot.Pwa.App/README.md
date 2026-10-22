@@ -2,6 +2,42 @@
 
 Robot PWA is the robot-facing companion app for Alfred Control Unit (ACU). It provides a setup and registration flow, shows Pudu Cloud destinations, and lets an Android robot launch navigation through the Pudu vendor app.
 
+## Current STT integration
+
+The `feat/robot-stt-to-acu` branch contains a focused Android verification flow:
+
+1. The robot records 16 kHz mono PCM audio after the user grants microphone permission.
+2. `whisper.rn` runs the multilingual whisper.cpp `base` model locally on the robot.
+3. The recognized text remains editable, then is posted to `POST /api/bot/transcripts/{deviceId}`.
+4. ACU validates the registered/approved robot and echoes the exact text plus `requestId`; the client rejects a mismatched echo.
+
+This endpoint is only a transport boundary. It does not store the patient's text and does not call Qwen yet.
+
+### Prepare the model
+
+The model is about 142 MB and is intentionally excluded from Git. Before building, download the official multilingual model to this exact path:
+
+```powershell
+$ModelDirectory = ".\android\app\src\main\assets\models"
+New-Item -ItemType Directory -Force $ModelDirectory
+Invoke-WebRequest `
+  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin" `
+  -OutFile "$ModelDirectory\ggml-base.bin"
+```
+
+Do not use `ggml-base.en.bin`; that variant is English-only. The `.bin` model is ignored by Git, while the deployment instructions remain tracked.
+
+### Run the focused checks
+
+```powershell
+npm ci
+npm run typecheck
+npm run test:transcript
+npm run android
+```
+
+The Android app defaults to `http://10.0.2.2:3000`, which reaches the host machine from the standard Android emulator. On a physical robot, replace it with the ACU's LAN address. The entered device ID and MAC must already be registered and approved in ACU.
+
 > **Implementation note:** Despite the project name, the current app is built with Expo and React Native, not the former Vite/Capacitor stack. The same React Native UI can run in a browser through React Native Web, but robot control, device information, and mDNS discovery require the Android app.
 
 ## Architecture

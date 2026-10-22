@@ -282,6 +282,47 @@ public class BotController(DeviceStore store, WorkflowStore workflowStore, AcuSe
         return Ok(new { command = d.Instructions, assignedWorkflowId });
     }
 
+    /// <summary>Receives patient speech that was transcribed locally on the robot.</summary>
+    /// <remarks>
+    /// This endpoint is the transport boundary for the STT integration. It validates
+    /// the approved robot and returns the exact text as a receipt. It deliberately
+    /// does not persist or log patient text and does not invoke the language model yet.
+    /// </remarks>
+    [HttpPost("bot/transcripts/{deviceId}")]
+    [Consumes("application/json")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
+    public IActionResult PostTranscript(string deviceId, [FromBody] TranscriptRequest body)
+    {
+        if (string.IsNullOrWhiteSpace(body.Text))
+            return BadRequest(new { error = "Transcript text must not be empty" });
+        if (string.IsNullOrWhiteSpace(body.Language))
+            return BadRequest(new { error = "Transcript language must not be empty" });
+        if (string.IsNullOrWhiteSpace(body.RequestId))
+            return BadRequest(new { error = "Request ID must not be empty" });
+
+        var db = store.Read();
+        var (device, error) = LookupDevice(deviceId, body.Mac, db);
+        if (error is not null) return error;
+
+        if (device!.Status != "approved")
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Device not approved" });
+
+        // Echoing the exact text lets the robot verify UTF-8 transport end-to-end.
+        // This response will be replaced by the ACU inference result in a later phase.
+        return Ok(new
+        {
+            message = "Transcript received",
+            requestId = body.RequestId,
+            deviceId,
+            text = body.Text,
+            language = body.Language,
+            receivedAt = DateTime.UtcNow.ToString("o")
+        });
+    }
+
     // ── Workflow delivery ──────────────────────────────────────────────────
 
     /// <summary>

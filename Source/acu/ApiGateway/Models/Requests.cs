@@ -39,6 +39,29 @@ public class UnregisterRequest
     public string Mac { get; set; } = "";
 }
 
+/// <summary>Locally transcribed patient speech sent by an approved robot.</summary>
+public class TranscriptRequest
+{
+    /// <example>AA:BB:CC:DD:EE:FF</example>
+    [Required]
+    public string Mac { get; set; } = "";
+
+    /// <example>Do I need to remove my glasses before the MRI?</example>
+    [Required]
+    [StringLength(4000, MinimumLength = 1)]
+    public string Text { get; set; } = "";
+
+    /// <example>en</example>
+    [Required]
+    [StringLength(16, MinimumLength = 2)]
+    public string Language { get; set; } = "auto";
+
+    /// <summary>Client-generated ID used to match the ACU receipt.</summary>
+    [Required]
+    [StringLength(128, MinimumLength = 1)]
+    public string RequestId { get; set; } = "";
+}
+
 /// <summary>Payload to assign a workflow to a device.</summary>
 public class AssignmentRequest
 {

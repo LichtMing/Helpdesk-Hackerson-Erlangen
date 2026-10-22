@@ -58,6 +58,9 @@ pnpm-debug.log*
 **/android/local.properties
 *.jsbundle
 
+# Large on-device ML models are deployed separately, never committed.
+Source/acu/Robot.Pwa.App/android/app/src/main/assets/models/*.bin
+
 # Local environment files (commit example templates only)
 .env
 .env.*
