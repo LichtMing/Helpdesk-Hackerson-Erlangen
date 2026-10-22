@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   SafeAreaView,
   ScrollView,
@@ -10,8 +10,17 @@ import {
 } from "react-native";
 
 import { createSpeechToText } from "./lib/speechToText";
-import type { SpeechLanguage } from "./lib/speechTypes";
+import type { SpeechLanguage, SpeechState } from "./lib/speechTypes";
 import { sendTranscript } from "./lib/transcriptApi";
+
+const stateLabels: Record<SpeechState, string> = {
+  initializing: "Loading local speech models",
+  listening: "Listening — speak naturally",
+  "speech-detected": "Patient is speaking",
+  transcribing: "Transcribing locally on the robot",
+  delivering: "Sending recognized text to ACU",
+  stopped: "Listening stopped",
+};
 
 export default function App() {
   const speechToText = useMemo(() => createSpeechToText(), []);
@@ -20,68 +29,71 @@ export default function App() {
   const [mac, setMac] = useState("AA:BB:CC:DD:EE:FF");
   const [language, setLanguage] = useState<SpeechLanguage>("auto");
   const [transcript, setTranscript] = useState("");
-  const [recording, setRecording] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState("Ready");
+  const [phase, setPhase] = useState<SpeechState>("initializing");
+  const [message, setMessage] = useState("Starting hands-free conversation mode…");
+  const settings = useRef({ baseUrl, deviceId, mac, language });
 
-  useEffect(() => () => {
-    void speechToText.release();
+  useEffect(() => {
+    settings.current = { baseUrl, deviceId, mac, language };
+  }, [baseUrl, deviceId, mac, language]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    void speechToText.start({
+      getLanguage: () => settings.current.language,
+      onStateChange: (state) => {
+        if (mounted) setPhase(state);
+      },
+      onTranscript: async (text) => {
+        if (!mounted) return;
+        setTranscript(text);
+        setMessage("Speech recognized; waiting for ACU receipt…");
+        const current = settings.current;
+        const receipt = await sendTranscript({
+          baseUrl: current.baseUrl,
+          deviceId: current.deviceId,
+          mac: current.mac,
+          text,
+          language: current.language,
+        });
+        if (mounted) {
+          setMessage(`ACU received the exact text at ${receipt.receivedAt}`);
+        }
+      },
+      onError: (error) => {
+        if (mounted) setMessage(error.message);
+      },
+    }).catch((error: unknown) => {
+      if (mounted) {
+        setPhase("stopped");
+        setMessage(error instanceof Error ? error.message : String(error));
+      }
+    });
+
+    return () => {
+      mounted = false;
+      void speechToText.release();
+    };
   }, [speechToText]);
-
-  const startRecording = async () => {
-    setBusy(true);
-    setStatus("Loading local Whisper model…");
-    try {
-      await speechToText.start();
-      setRecording(true);
-      setStatus("Recording — ask the question, then press Stop");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const stopRecording = async () => {
-    setBusy(true);
-    setStatus("Transcribing locally on the robot…");
-    try {
-      const text = await speechToText.stop(language);
-      setTranscript(text);
-      setRecording(false);
-      setStatus("Transcription ready; review it before sending");
-    } catch (error) {
-      setRecording(false);
-      setStatus(error instanceof Error ? error.message : String(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const transmit = async () => {
-    setBusy(true);
-    setStatus("Sending text to ACU…");
-    try {
-      const receipt = await sendTranscript({
-        baseUrl,
-        deviceId,
-        mac,
-        text: transcript,
-        language,
-      });
-      setStatus(`ACU confirmed exact text at ${receipt.receivedAt}`);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Robot voice input → ACU</Text>
-        <Text style={styles.subtitle}>Offline Whisper transcription and API transport check</Text>
+        <View style={styles.headingRow}>
+          <View>
+            <Text style={styles.title}>Hands-free patient conversation</Text>
+            <Text style={styles.subtitle}>Local VAD + Whisper → ACU text API</Text>
+          </View>
+          <View style={[styles.indicator, indicatorStyle(phase)]} />
+        </View>
+
+        <View style={styles.statePanel}>
+          <Text style={styles.state}>{stateLabels[phase]}</Text>
+          <Text style={styles.hint}>
+            No start/stop button is needed. After a short pause, the robot automatically transcribes and sends the sentence.
+          </Text>
+        </View>
 
         <View style={styles.row}>
           <Field label="ACU URL" value={baseUrl} onChangeText={setBaseUrl} />
@@ -96,39 +108,29 @@ export default function App() {
               key={value}
               style={[styles.chip, language === value && styles.chipSelected]}
               onPress={() => setLanguage(value)}
-              disabled={busy || recording}
             >
               <Text style={styles.chipText}>{value}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <View style={styles.actions}>
-          <Button
-            label={recording ? "Stop & transcribe" : "Start recording"}
-            onPress={recording ? stopRecording : startRecording}
-            disabled={busy}
-            danger={recording}
-          />
-          <Button
-            label="Send text to ACU"
-            onPress={transmit}
-            disabled={busy || recording || !transcript.trim()}
-          />
+        <Text style={styles.label}>Last recognized sentence</Text>
+        <View style={styles.transcriptPanel}>
+          <Text style={styles.transcript}>
+            {transcript || "Waiting for the patient to speak…"}
+          </Text>
         </View>
-
-        <Text style={styles.label}>Recognized text (editable)</Text>
-        <TextInput
-          style={styles.transcript}
-          multiline
-          value={transcript}
-          onChangeText={setTranscript}
-          placeholder="The local transcript will appear here"
-        />
-        <Text style={styles.status}>{status}</Text>
+        <Text style={styles.message}>{message}</Text>
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function indicatorStyle(phase: SpeechState) {
+  if (phase === "listening") return styles.indicatorListening;
+  if (phase === "speech-detected") return styles.indicatorSpeaking;
+  if (phase === "stopped") return styles.indicatorStopped;
+  return styles.indicatorBusy;
 }
 
 function Field(props: {
@@ -149,32 +151,20 @@ function Field(props: {
   );
 }
 
-function Button(props: {
-  label: string;
-  onPress: () => void;
-  disabled: boolean;
-  danger?: boolean;
-}) {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.button,
-        props.danger && styles.dangerButton,
-        props.disabled && styles.disabledButton,
-      ]}
-      onPress={props.onPress}
-      disabled={props.disabled}
-    >
-      <Text style={styles.buttonText}>{props.label}</Text>
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#07191b" },
   container: { padding: 28, gap: 18 },
+  headingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   title: { color: "#ffffff", fontSize: 32, fontWeight: "700" },
-  subtitle: { color: "#75d5d0", fontSize: 17 },
+  subtitle: { color: "#75d5d0", fontSize: 17, marginTop: 6 },
+  indicator: { width: 22, height: 22, borderRadius: 11 },
+  indicatorListening: { backgroundColor: "#29c781" },
+  indicatorSpeaking: { backgroundColor: "#f0a050" },
+  indicatorBusy: { backgroundColor: "#41a9e0" },
+  indicatorStopped: { backgroundColor: "#d94d55" },
+  statePanel: { backgroundColor: "#102a2d", borderRadius: 10, padding: 18, gap: 8 },
+  state: { color: "#ffffff", fontSize: 22, fontWeight: "700" },
+  hint: { color: "#b9cecf", fontSize: 15, lineHeight: 21 },
   row: { flexDirection: "row", gap: 14, flexWrap: "wrap" },
   field: { flex: 1, minWidth: 210, gap: 6 },
   label: { color: "#b9cecf", fontSize: 14, fontWeight: "600" },
@@ -191,22 +181,14 @@ const styles = StyleSheet.create({
   chip: { backgroundColor: "#254043", borderRadius: 16, paddingHorizontal: 15, paddingVertical: 8 },
   chipSelected: { backgroundColor: "#008c95" },
   chipText: { color: "#ffffff", fontWeight: "700" },
-  actions: { flexDirection: "row", gap: 14 },
-  button: { backgroundColor: "#008c95", borderRadius: 8, paddingHorizontal: 22, paddingVertical: 14 },
-  dangerButton: { backgroundColor: "#d56a16" },
-  disabledButton: { opacity: 0.45 },
-  buttonText: { color: "#ffffff", fontSize: 16, fontWeight: "700" },
-  transcript: {
+  transcriptPanel: {
     minHeight: 140,
-    color: "#ffffff",
     backgroundColor: "#102a2d",
     borderColor: "#287d7d",
     borderWidth: 1,
     borderRadius: 8,
-    padding: 14,
-    textAlignVertical: "top",
-    fontSize: 18,
+    padding: 16,
   },
-  status: { color: "#f0a050", fontSize: 16 },
+  transcript: { color: "#ffffff", fontSize: 20, lineHeight: 28 },
+  message: { color: "#f0a050", fontSize: 16 },
 });
-

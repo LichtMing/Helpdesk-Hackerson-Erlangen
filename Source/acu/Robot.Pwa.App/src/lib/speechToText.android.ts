@@ -1,44 +1,83 @@
 import { PermissionsAndroid } from "react-native";
-import { initWhisper, type WhisperContext } from "whisper.rn/index";
+import {
+  initWhisper,
+  initWhisperVad,
+  type WhisperContext,
+  type WhisperVadContext,
+} from "whisper.rn/index";
 import { AudioPcmStreamAdapter } from "whisper.rn/realtime-transcription/adapters/AudioPcmStreamAdapter";
+import { RingBufferVad } from "whisper.rn/realtime-transcription/RingBufferVad";
 
 import {
+  VAD_MODEL_ASSET,
   WHISPER_MODEL_ASSET,
-  type SpeechLanguage,
+  type HandsFreeSpeechOptions,
   type SpeechToText,
 } from "./speechTypes";
 
 const SAMPLE_RATE = 16_000;
 const CHANNELS = 1;
 const BITS_PER_SAMPLE = 16;
-const MAX_RECORDING_BYTES = SAMPLE_RATE * (BITS_PER_SAMPLE / 8) * 60;
+const MIN_RECORDING_BYTES = SAMPLE_RATE * (BITS_PER_SAMPLE / 8);
+const MAX_RECORDING_BYTES = MIN_RECORDING_BYTES * 30;
 
-class AndroidWhisperSpeechToText implements SpeechToText {
-  private context: WhisperContext | null = null;
+class AndroidHandsFreeSpeechToText implements SpeechToText {
+  private whisperContext: WhisperContext | null = null;
+  private vadContext: WhisperVadContext | null = null;
+  private vad: RingBufferVad | null = null;
   private initialization: Promise<void> | null = null;
   private readonly audioStream = new AudioPcmStreamAdapter();
+  private options: HandsFreeSpeechOptions | null = null;
   private chunks: Uint8Array[] = [];
   private byteCount = 0;
-  private recording = false;
+  private startRequested = false;
+  private running = false;
+  private processing = false;
   private streamError: string | null = null;
+  private activeTranscriptionStop: (() => Promise<void>) | null = null;
+  private processingPromise: Promise<void> | null = null;
 
-  initialize(): Promise<void> {
-    if (this.context) return Promise.resolve();
+  private initialize(): Promise<void> {
+    if (this.whisperContext && this.vadContext && this.vad) {
+      return Promise.resolve();
+    }
     if (this.initialization) return this.initialization;
 
-    const initialization = initWhisper({
-      filePath: WHISPER_MODEL_ASSET,
-      isBundleAsset: true,
-      useGpu: true,
-      useFlashAttn: true,
-    })
-      .then((context) => {
-        this.context = context;
-      })
+    // Initialize sequentially because both contexts share the same JSI bridge.
+    const initialization = (async () => {
+      this.whisperContext = await initWhisper({
+        filePath: WHISPER_MODEL_ASSET,
+        isBundleAsset: true,
+        useGpu: true,
+        useFlashAttn: true,
+      });
+      this.vadContext = await initWhisperVad({
+        filePath: VAD_MODEL_ASSET,
+        isBundleAsset: true,
+        useGpu: false,
+        nThreads: 2,
+      });
+
+      this.vad = new RingBufferVad(this.vadContext, {
+        sampleRate: SAMPLE_RATE,
+        preRecordingBufferMs: 1_000,
+        inferenceIntervalMs: 500,
+        speechRateThreshold: 0.3,
+        vadOptions: {
+          threshold: 0.5,
+          minSpeechDurationMs: 250,
+          minSilenceDurationMs: 700,
+          maxSpeechDurationS: 30,
+          speechPadMs: 100,
+          samplesOverlap: 0.1,
+        },
+      });
+      this.bindVadCallbacks(this.vad);
+    })()
       .catch((error: unknown) => {
         const detail = error instanceof Error ? error.message : String(error);
         throw new Error(
-          `无法加载 Whisper 模型 ${WHISPER_MODEL_ASSET}。请先按 android/app/src/main/assets/models/README.md 部署模型。${detail}`,
+          `无法加载离线语音模型。请按 android/app/src/main/assets/models/README.md 部署 ${WHISPER_MODEL_ASSET} 和 ${VAD_MODEL_ASSET}。${detail}`,
         );
       })
       .finally(() => {
@@ -49,106 +88,176 @@ class AndroidWhisperSpeechToText implements SpeechToText {
     return initialization;
   }
 
-  async start(): Promise<void> {
-    if (this.recording) return;
+  async start(options: HandsFreeSpeechOptions): Promise<void> {
+    if (this.startRequested) return;
+    this.startRequested = true;
+    this.options = options;
+    this.options.onStateChange("initializing");
 
-    const permission = await PermissionsAndroid.request(
-      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-      {
-        title: "Microphone permission",
-        message: "The robot needs microphone access to transcribe a patient's question locally.",
-        buttonPositive: "Allow",
-        buttonNegative: "Cancel",
-      },
-    );
+    try {
+      const permission = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        {
+          title: "Microphone permission",
+          message: "The robot listens locally so patients can speak without pressing a button.",
+          buttonPositive: "Allow",
+          buttonNegative: "Cancel",
+        },
+      );
+      if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
+        throw new Error("麦克风权限未授予，免按键对话无法启动。");
+      }
 
-    if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
-      throw new Error("麦克风权限未授予，无法开始语音识别。");
+      await this.initialize();
+      if (!this.startRequested) return;
+      if (!this.vad) throw new Error("语音活动检测尚未初始化。");
+
+      this.running = true;
+      this.resetUtterance();
+      this.audioStream.onData(({ data }) => {
+        if (this.running && !this.processing) this.vad?.processAudio(data);
+      });
+      this.audioStream.onError((error) => this.reportError(new Error(error)));
+      await this.audioStream.initialize({
+        sampleRate: SAMPLE_RATE,
+        channels: CHANNELS,
+        bitsPerSample: BITS_PER_SAMPLE,
+        audioSource: 6,
+        bufferSize: 16 * 1024,
+      });
+      await this.audioStream.start();
+      this.options.onStateChange("listening");
+    } catch (error) {
+      this.startRequested = false;
+      this.running = false;
+      throw error;
     }
+  }
 
-    await this.initialize();
+  private bindVadCallbacks(vad: RingBufferVad): void {
+    vad.onSpeechStart((_confidence, data) => {
+      if (!this.running || this.processing) return;
+      this.resetUtterance();
+      this.appendAudio(data);
+      this.options?.onStateChange("speech-detected");
+    });
+    vad.onSpeechContinue((_confidence, data) => {
+      if (!this.running || this.processing) return;
+      this.appendAudio(data);
+    });
+    vad.onSpeechEnd(() => {
+      if (!this.running || this.processing) return;
+      this.processingPromise = this.processUtterance().finally(() => {
+        this.processingPromise = null;
+      });
+    });
+    vad.onError((error) => this.reportError(new Error(error)));
+  }
 
+  private appendAudio(data: Uint8Array): void {
+    if (this.byteCount + data.byteLength > MAX_RECORDING_BYTES) {
+      this.streamError = "单句话最长 30 秒，请停顿后重新提问。";
+      return;
+    }
+    const copy = new Uint8Array(data.byteLength);
+    copy.set(data);
+    this.chunks.push(copy);
+    this.byteCount += copy.byteLength;
+  }
+
+  private async processUtterance(): Promise<void> {
+    this.processing = true;
+    try {
+      await this.audioStream.stop();
+      if (this.streamError) throw new Error(this.streamError);
+      if (!this.whisperContext) throw new Error("Whisper 模型尚未初始化。");
+      if (this.byteCount < MIN_RECORDING_BYTES) return;
+
+      this.options?.onStateChange("transcribing");
+      const pcm = new ArrayBuffer(this.byteCount);
+      const output = new Uint8Array(pcm);
+      let offset = 0;
+      for (const chunk of this.chunks) {
+        output.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+
+      const transcription = this.whisperContext.transcribeData(pcm, {
+        language: this.options?.getLanguage() ?? "auto",
+        translate: false,
+        maxThreads: 4,
+      });
+      this.activeTranscriptionStop = transcription.stop;
+      const result = await transcription.promise;
+      this.activeTranscriptionStop = null;
+      const text = result.result.trim();
+      if (!text) throw new Error("检测到说话，但没有识别出文字。");
+
+      this.options?.onStateChange("delivering");
+      await this.options?.onTranscript(text);
+    } catch (error) {
+      this.reportError(error instanceof Error ? error : new Error(String(error)));
+    } finally {
+      this.activeTranscriptionStop = null;
+      this.resetUtterance();
+      await this.vad?.reset();
+      this.processing = false;
+
+      if (this.running) {
+        try {
+          await this.audioStream.start();
+          this.options?.onStateChange("listening");
+        } catch (error) {
+          this.running = false;
+          this.reportError(error instanceof Error ? error : new Error(String(error)));
+        }
+      }
+    }
+  }
+
+  private resetUtterance(): void {
     this.chunks = [];
     this.byteCount = 0;
     this.streamError = null;
+  }
 
-    this.audioStream.onData(({ data }) => {
-      if (this.byteCount + data.byteLength > MAX_RECORDING_BYTES) {
-        this.streamError = "单次录音最长 60 秒，请停止后重新提问。";
-        return;
+  private reportError(error: Error): void {
+    this.options?.onError(error);
+  }
+
+  async stop(): Promise<void> {
+    this.startRequested = false;
+    this.running = false;
+    if (this.initialization) {
+      try {
+        await this.initialization;
+      } catch {
+        // The original start call reports initialization failures.
       }
-
-      // The native recorder may reuse its buffer, so retain an owned copy.
-      const copy = new Uint8Array(data.byteLength);
-      copy.set(data);
-      this.chunks.push(copy);
-      this.byteCount += copy.byteLength;
-    });
-    this.audioStream.onError((error) => {
-      this.streamError = error;
-    });
-
-    await this.audioStream.initialize({
-      sampleRate: SAMPLE_RATE,
-      channels: CHANNELS,
-      bitsPerSample: BITS_PER_SAMPLE,
-      audioSource: 6,
-      bufferSize: 16 * 1024,
-    });
-    await this.audioStream.start();
-    this.recording = true;
+    }
+    if (this.audioStream.isRecording()) await this.audioStream.stop();
+    if (this.activeTranscriptionStop) await this.activeTranscriptionStop();
+    if (this.processingPromise) await this.processingPromise;
+    await this.vad?.reset();
+    this.options?.onStateChange("stopped");
   }
 
-  async stop(language: SpeechLanguage = "auto"): Promise<string> {
-    if (!this.recording) {
-      throw new Error("当前没有正在进行的录音。");
-    }
-
-    await this.audioStream.stop();
-    this.recording = false;
-
-    if (this.streamError) throw new Error(this.streamError);
-    if (!this.context) throw new Error("Whisper 模型尚未初始化。");
-    if (this.byteCount < SAMPLE_RATE * (BITS_PER_SAMPLE / 8)) {
-      throw new Error("录音不足 1 秒，请重新录制完整问题。");
-    }
-
-    const pcm = new ArrayBuffer(this.byteCount);
-    const output = new Uint8Array(pcm);
-    let offset = 0;
-    for (const chunk of this.chunks) {
-      output.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-
-    this.chunks = [];
-    this.byteCount = 0;
-
-    const { promise } = this.context.transcribeData(pcm, {
-      language,
-      translate: false,
-      maxThreads: 4,
-    });
-    const result = await promise;
-    const text = result.result.trim();
-
-    if (!text) throw new Error("没有识别到语音，请靠近麦克风后重试。");
-    return text;
-  }
-
-  isRecording(): boolean {
-    return this.recording;
+  isListening(): boolean {
+    return this.running;
   }
 
   async release(): Promise<void> {
-    if (this.recording) await this.audioStream.stop();
-    this.recording = false;
+    await this.stop();
     await this.audioStream.release();
-    if (this.context) await this.context.release();
-    this.context = null;
+    await this.vadContext?.release();
+    await this.whisperContext?.release();
+    this.vad = null;
+    this.vadContext = null;
+    this.whisperContext = null;
+    this.options = null;
   }
 }
 
 export function createSpeechToText(): SpeechToText {
-  return new AndroidWhisperSpeechToText();
+  return new AndroidHandsFreeSpeechToText();
 }

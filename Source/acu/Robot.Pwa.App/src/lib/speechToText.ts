@@ -1,21 +1,15 @@
-import type { SpeechLanguage, SpeechToText } from "./speechTypes";
+import type { HandsFreeSpeechOptions, SpeechToText } from "./speechTypes";
 
 class UnsupportedSpeechToText implements SpeechToText {
-  async initialize(): Promise<void> {
-    throw new Error("本地 Whisper 语音识别目前只集成到 Android 构建中。");
+  async start(_options: HandsFreeSpeechOptions): Promise<void> {
+    throw new Error("免按键本地语音识别目前只集成到 Android 构建中。");
   }
 
-  async start(): Promise<void> {
-    return this.initialize();
-  }
-
-  async stop(_language?: SpeechLanguage): Promise<string> {
-    return this.initialize().then(() => "");
-  }
+  async stop(): Promise<void> {}
 
   async release(): Promise<void> {}
 
-  isRecording(): boolean {
+  isListening(): boolean {
     return false;
   }
 }
@@ -23,4 +17,3 @@ class UnsupportedSpeechToText implements SpeechToText {
 export function createSpeechToText(): SpeechToText {
   return new UnsupportedSpeechToText();
 }
-

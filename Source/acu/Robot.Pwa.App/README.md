@@ -6,16 +6,17 @@ Robot PWA is the robot-facing Android companion app for Alfred Control Unit (ACU
 
 The `feat/robot-stt-to-acu` branch contains a focused Android verification flow:
 
-1. The robot records 16 kHz mono PCM audio after the user grants microphone permission.
-2. `whisper.rn` runs the multilingual whisper.cpp `base` model locally on the robot.
-3. The recognized text remains editable, then is posted to `POST /api/bot/transcripts/{deviceId}`.
-4. ACU validates the registered/approved robot and echoes the exact text plus `requestId`; the client rejects a mismatched echo.
+1. After the one-time Android microphone permission, the app starts listening automatically.
+2. Local Silero VAD detects speech and ends an utterance after about 700 ms of silence.
+3. `whisper.rn` runs the multilingual whisper.cpp `base` model locally on the robot.
+4. The recognized text is posted automatically to `POST /api/bot/transcripts/{deviceId}`.
+5. ACU validates the registered/approved robot and echoes the exact text plus `requestId`; the client rejects a mismatched echo and then resumes listening.
 
 This endpoint is only a transport boundary. It does not store the patient's text and does not call Qwen yet.
 
 ### Prepare the model
 
-The model is about 142 MB and is intentionally excluded from Git. Before building, download the official multilingual model to this exact path:
+The model binaries are intentionally excluded from Git. Before building, download the official multilingual Whisper model and Silero VAD model to these exact paths:
 
 ```powershell
 $ModelDirectory = ".\android\app\src\main\assets\models"
@@ -23,9 +24,12 @@ New-Item -ItemType Directory -Force $ModelDirectory
 Invoke-WebRequest `
   "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin" `
   -OutFile "$ModelDirectory\ggml-base.bin"
+Invoke-WebRequest `
+  "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v6.2.0.bin" `
+  -OutFile "$ModelDirectory\ggml-silero-v6.2.0.bin"
 ```
 
-Do not use `ggml-base.en.bin`; that variant is English-only. The `.bin` model is ignored by Git, while the deployment instructions remain tracked.
+Do not use `ggml-base.en.bin`; that variant is English-only. Both `.bin` files are ignored by Git, while the deployment instructions remain tracked.
 
 ### Run the focused checks
 
@@ -44,13 +48,14 @@ The Android app defaults to `http://10.0.2.2:3000`, which reaches the host machi
 
 ```text
 src/App.tsx
-  ├── record / stop controls and editable transcript
+  ├── hands-free conversation status and last transcript
   ├── ACU URL, device ID, MAC, and language inputs
   └── send button and exact-text receipt status
 
 src/lib/speechToText.android.ts
   ├── Android microphone permission
   ├── 16 kHz, mono, 16-bit PCM capture
+  ├── Silero VAD automatic speech boundaries
   └── local whisper.cpp inference through whisper.rn
 
 src/lib/transcriptApi.ts
@@ -86,9 +91,9 @@ On the app screen:
 
 1. Enter the reachable ACU URL plus an approved device ID and matching MAC.
 2. Select `auto`, `en`, `de`, or `zh`.
-3. Press **Start recording**, speak for at least one second, then press **Stop & transcribe**.
-4. Review or edit the text and press **Send text to ACU**.
-5. Success is shown only when ACU returns the same `requestId` and exact text.
+3. Speak normally; no recording button is required.
+4. A short silence ends the sentence, triggers local transcription, and sends the text automatically.
+5. After ACU returns the same `requestId` and exact text, the robot listens for the next sentence.
 
 ## Checks
 
