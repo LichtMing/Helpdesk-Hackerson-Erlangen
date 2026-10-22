@@ -1,6 +1,6 @@
 # Robot PWA App
 
-Robot PWA is the robot-facing companion app for Alfred Control Unit (ACU). It provides a setup and registration flow, shows Pudu Cloud destinations, and lets an Android robot launch navigation through the Pudu vendor app.
+Robot PWA is the robot-facing Android companion app for Alfred Control Unit (ACU). The current implementation is a focused speech-to-text and text-transport verification client.
 
 ## Current STT integration
 
@@ -38,146 +38,62 @@ npm run android
 
 The Android app defaults to `http://10.0.2.2:3000`, which reaches the host machine from the standard Android emulator. On a physical robot, replace it with the ACU's LAN address. The entered device ID and MAC must already be registered and approved in ACU.
 
-> **Implementation note:** Despite the project name, the current app is built with Expo and React Native, not the former Vite/Capacitor stack. The same React Native UI can run in a browser through React Native Web, but robot control, device information, and mDNS discovery require the Android app.
+> Despite its historical name, this is an Expo/React Native Android app. Local speech recognition uses native modules, so it will not run inside Expo Go; use an Android development build or APK.
 
-## Architecture
+## Implemented structure
 
 ```text
-React Native UI (Expo)
-  App.tsx
-    ├── ConfigPage ── AsyncStorage: ACU URL + Pudu configuration
-    ├── RegisterPage ── POST device details to ACU
-    └── DestinationsPage
-          ├── GET destination points from Pudu Cloud
-          ├── POST heartbeat / navigation events to ACU
-          └── Android RobotArrival bridge ── robot:// Intent ──► Pudu vendor app
+src/App.tsx
+  ├── record / stop controls and editable transcript
+  ├── ACU URL, device ID, MAC, and language inputs
+  └── send button and exact-text receipt status
 
-Android native modules
-  ├── AcuDeviceInfo     Reads device IP, MAC, and firmware
-  ├── AcuDiscovery      Finds ACU on the LAN using Android NSD/mDNS
-  └── RobotArrival      Starts navigation and forwards arrival callbacks to JavaScript
+src/lib/speechToText.android.ts
+  ├── Android microphone permission
+  ├── 16 kHz, mono, 16-bit PCM capture
+  └── local whisper.cpp inference through whisper.rn
+
+src/lib/transcriptApi.ts
+  └── POST /api/bot/transcripts/{deviceId} with timeout and receipt validation
 ```
 
-### Application layers
-
-- **UI and flow:** `src/App.tsx` selects the configuration, registration, or destination screen according to saved setup state. Shared styling and light/dark palettes live in `src/theme.tsx`.
-- **Persistence:** `src/lib/storage.ts` stores configuration and registered device details in React Native AsyncStorage. Reads and writes are asynchronous.
-- **ACU API:** `src/lib/acu.ts` registers a device at `POST /api/bot/register` and sends status/heartbeat requests to `POST /api/bot/device-status/{deviceId}`. The destination screen sends heartbeats every five seconds and reports navigation and arrival events.
-- **Pudu Cloud:** `src/lib/puduRequest.ts` builds the signed destination request; `src/lib/puduCloud.ts` fetches and maps destination points. In Expo development mode, it returns sample destinations so UI development does not require a live robot or Pudu Cloud connection.
-- **HTTP:** `src/lib/acuHttp.ts` is the shared JSON request helper. React Native uses its native networking stack; browser preview requests are subject to browser networking and CORS rules.
-- **Android bridge:** Native modules are registered in `android/app/src/main/java/com/acu/robotpwa/RobotPwaPackage.java`. `MainActivity.java` forwards robot arrival Intents to the `RobotArrival` module, which emits events to JavaScript.
-- **Browser preview:** Expo serves the React Native UI through React Native Web. Selecting a destination in the browser simulates the navigation screen; it does not move a robot.
-
-### Setup and runtime flow
-
-1. **Configure:** Enter Pudu API settings and the ACU URL. On Android, the app can discover ACU on the local network; in a browser, enter the URL manually.
-2. **Register:** Enter or confirm the device details and register the robot with ACU. ACU may require an operator to approve the device.
-3. **Operate:** The app loads destination points, checks ACU connectivity, and offers destinations. Android launches the Pudu vendor app through a `robot://` Intent and receives the arrival callback.
+`speechToText.ts` is a non-Android stub so the UI can still be bundled for the web, but recording and Whisper inference are Android-only.
 
 ## Requirements
 
-- Node.js (22 LTS or newer) and npm.
-- For Android: Android Studio, Android SDK/platform tools, a configured JDK, and an Android emulator or connected robot.
-- For browser tests: the Playwright Chromium browser (installation command below).
-
-The development browser preview does not require an Android device. Native discovery and hardware metadata are unavailable there.
+- Node.js 22.20 or newer and npm.
+- Android Studio with a JDK and Android SDK/platform tools.
+- An Android emulator or connected robot with microphone access.
+- A running ACU ApiGateway reachable over the network.
+- A robot record already registered and approved in ACU; the test endpoint uses the existing device ID and MAC validation.
 
 ## Install and run
 
-Run these commands in PowerShell from the repository root:
+From the repository root in PowerShell:
 
 ```powershell
-Set-Location .\Robot.Pwa.App
+Set-Location .\Source\acu\Robot.Pwa.App
 npm ci
+# Download the model as described above.
 npm run typecheck
+npm run test:transcript
+npm run android
 ```
 
-Start the Expo development server and choose a target from its terminal menu:
+The checked-in Android project contains native-module autolinking and microphone permission. Do not run `npm run prebuild` casually: Expo regenerates `android/`, so review and restore project-specific manifest or Gradle settings afterward.
 
-```powershell
-npm start
-```
+On the app screen:
 
-If startup fails with `TypeError: fetch failed` in a restricted or unavailable network, run Expo in offline mode:
+1. Enter the reachable ACU URL plus an approved device ID and matching MAC.
+2. Select `auto`, `en`, `de`, or `zh`.
+3. Press **Start recording**, speak for at least one second, then press **Stop & transcribe**.
+4. Review or edit the text and press **Send text to ACU**.
+5. Success is shown only when ACU returns the same `requestId` and exact text.
 
-```powershell
-npm start -- --offline
-```
+## Checks
 
-Offline mode skips Expo's network-dependent checks and can serve the local app, but does not make ACU or Pudu Cloud services available; the Android device/browser still needs network access to those services when used.
+- `npm run typecheck` performs strict TypeScript checking.
+- `npm run test:transcript` starts a temporary HTTP server and verifies the JSON route, Unicode text, exact echo, and rejected-device error path.
+- `npm run web` previews the screen layout only; browser recording is intentionally unsupported.
 
-Or start a specific target:
-
-```powershell
-npm run web       # Browser preview
-npm run android   # Build/install and launch on an Android emulator or device
-```
-
-For Android, start an emulator or connect the robot with USB debugging enabled before running `npm run android`. The Android device and ACU must be able to reach each other over the network. Use the app’s Settings screen to clear saved configuration and registration and return to the initial setup screen.
-
-## Build the Android APK
-
-From `Robot.Pwa.App`:
-
-```powershell
-npm run build:apk
-```
-
-This builds a standalone release APK (Siemens petrol theme) at:
-
-```text
-android/app/build/outputs/apk/ACU-Robot-Siemens-Petrol.apk
-```
-
-Install it on a connected device:
-
-```powershell
-adb devices
-adb install -r .\android\app\build\outputs\apk\ACU-Robot-Siemens-Petrol.apk
-adb shell am start -n com.acu.robotpwa/.MainActivity
-```
-
-The release variant currently uses the debug keystore; configure a production keystore before public distribution.
-
-The build script uses the existing Android project and does not run `expo prebuild`, which would regenerate native files and remove custom manifest changes (such as cleartext traffic). Review generated changes before building after any intentional prebuild.
-
-## Tests and checks
-
-Run from `Robot.Pwa.App`:
-
-```powershell
-npm run typecheck
-npm run test:pudu
-npx playwright install chromium   # One-time browser setup for Playwright
-npm run test:web
-```
-
-The browser test command starts the web app on port `8082` and runs the Playwright desktop and phone projects. To run a subset of tests, pass Playwright options, for example:
-
-```powershell
-npm run test:web -- --grep "registration"
-```
-
-## Available npm scripts
-
-| Command | Purpose |
-| --- | --- |
-| `npm start` / `npm run start` | Start the Expo development server. |
-| `npm run web` | Start the browser preview. |
-| `npm run android` | Run the app on Android. |
-| `npm run prebuild` | Generate the Android native project with Expo. |
-| `npm run build:apk` | Build the standalone Siemens petrol release APK. |
-| `npm run typecheck` | Run TypeScript without emitting files. |
-| `npm run test:web` | Run Playwright browser tests. |
-| `npm run test:pudu` | Run Pudu request unit tests with Node’s test runner. |
-| `npm run ios` | Run on iOS; requires macOS and Xcode. |
-
-## Useful Android troubleshooting commands
-
-```powershell
-adb logcat
-adb shell pm clear com.acu.robotpwa
-adb shell am start -n com.acu.robotpwa/.MainActivity --es tableNum T-101
-```
-
-`pm clear` removes the app’s saved setup and registered-device data. The final command sends a sample arrival Intent to the app for testing the Android arrival callback; it does not simulate physical robot movement.
+For Android diagnostics, use `adb logcat`. The release build currently uses the debug keystore and must be given a production signing configuration before distribution.
