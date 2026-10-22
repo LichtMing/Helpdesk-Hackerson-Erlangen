@@ -1,0 +1,88 @@
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local credentials and Codex/agent state
+/.aws/
+/.codex/
+/.agents/
+
+# IDE and editor-local state
+.vs/
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.sw?
+*~
+
+# .NET build output
+**/[Bb]in/
+**/[Oo]bj/
+**/[Pp]ublish/
+
+# Node.js dependencies, caches, and logs
+**/node_modules/
+**/.npm/
+**/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Frontend build and test output
+**/dist/
+**/dist-ssr/
+**/coverage/
+**/playwright-report/
+**/test-results/
+*.tsbuildinfo
+
+# Expo and React Native local state
+**/.expo/
+**/.expo-shared/
+
+# Android local/build state
+**/android/.gradle/
+**/android/.kotlin/
+**/android/**/.cxx/
+**/android/**/build/
+**/android/local.properties
+*.jsbundle
+
+# Local environment files (commit example templates only)
+.env
+.env.*
+!.env.example
+!*.env.example
+
+# Generated packages and source snapshots
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.apk
+*.aab
+acu-release*/
+
+# Signing keys and certificates. The checked-in key is for Android debug only.
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+!Source/acu/Robot.Pwa.App/android/app/debug.keystore
+
+# Go build/test output
+*.exe
+*.test
+*.out
