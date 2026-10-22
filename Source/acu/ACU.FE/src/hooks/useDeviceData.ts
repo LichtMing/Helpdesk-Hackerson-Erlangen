@@ -1,5 +1,29 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { DeviceRequest, RegisteredDevice } from "../types";
+const USE_MOCK = true;
+const MOCK_DEVICES = [
+  {
+    id: "robot-alfred-01",
+    deviceName: "Alfred Medical Assistant Robot",
+    macAddress: "00:11:22:33:44:55",
+    status: "idle",
+    battery: 87
+  }
+] as any[];
+
+const MOCK_REQUESTS = [
+  {
+    id: "req-001",
+    deviceId: "robot-alfred-01",
+    status: "pending",
+    name: "Alfred Medical Assistant Robot",
+    ip: "192.168.1.101",
+    mac: "00:11:22:33:44:55",
+    firmware: "v1.0.2",
+    createdAt: Date.now() - 120000
+  }
+] as any[];
+
 
 /** Poll cadence while the server is reachable. */
 const POLL_INTERVAL_ONLINE_MS  = 3_000;
@@ -45,7 +69,13 @@ export function useDeviceData() {
   // Adaptive poller: 3 s while healthy, exponential back-off (5 → 10 → 20 → 30 s)
   // while the server is unreachable. Reschedules itself after each attempt so a
   // failed call doesn't drag the healthy cadence down.
-  useEffect(() => {
+  useEffect(() => {if (USE_MOCK) {
+    setRegisteredDevices(MOCK_DEVICES);
+    setRequests(MOCK_REQUESTS);
+    setIsServerOnline(true);
+    setLastRefreshed(new Date());
+    setNotification(null);
+    return;}
     let timer: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
 
