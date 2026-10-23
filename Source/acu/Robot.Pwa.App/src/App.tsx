@@ -29,6 +29,8 @@ import {
   verifyApprovedRobot,
 } from "./lib/deviceApi";
 import { playWaveResponse } from "./lib/responsePlayer";
+import { requestStaffHelp } from "./lib/helpRequest";
+import PatientScreen, { type ChatMessage } from "./PatientScreen";
 import {
   DEFAULT_ROBOT_CONFIG,
   normalizeRobotConfig,
@@ -308,6 +310,10 @@ function ConversationScreen(props: {
   const [answer, setAnswer] = useState("");
   const [phase, setPhase] = useState<SpeechState>("initializing");
   const [message, setMessage] = useState("Starting hands-free conversation mode…");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [helpRequested, setHelpRequested] = useState(false);
+  const [notice, setNotice] = useState("");
   const sessionId = useRef(createSessionId());
   const configRef = useRef(props.config);
 
@@ -327,6 +333,8 @@ function ConversationScreen(props: {
       onTranscript: async (text: string, detectedLanguage: SpeechLanguage) => {
         if (!mounted) return;
         setTranscript(text);
+        setNotice("");
+        setMessages((prev) => [...prev, { id: `p-${Date.now()}`, role: "patient" as const, text }].slice(-20));
         setMessage("Speech recognized; waiting for the ACU answer…");
         const current = configRef.current;
         const reply = await sendChat({
@@ -339,6 +347,7 @@ function ConversationScreen(props: {
         });
         if (!mounted) return;
         setAnswer(reply.answer);
+        setMessages((prev) => [...prev, { id: `a-${reply.requestId}`, role: "assistant" as const, text: reply.answer }].slice(-20));
         setMessage(reply.isMock
           ? "Development response received; requesting ACU speech…"
           : "ACU answer received; requesting ACU speech…");
@@ -346,11 +355,18 @@ function ConversationScreen(props: {
         const audio = await synthesizeSpeech(current, reply.answer, reply.language);
         if (!mounted) return;
         setMessage("The robot is speaking. Listening is paused to prevent echo.");
-        await playWaveResponse(audio, reply.requestId);
+        setIsSpeaking(true);
+        try {
+          await playWaveResponse(audio, reply.requestId);
+        } finally {
+          if (mounted) setIsSpeaking(false);
+        }
         if (mounted) setMessage("Answer delivered; resuming hands-free listening.");
       },
       onError: (error: Error) => {
-        if (mounted) setMessage(error.message);
+        if (!mounted) return;
+        setMessage(error.message);
+        setNotice("Sorry, something went wrong. Please try again or ask a staff member.");
       },
     };
 
@@ -391,43 +407,23 @@ function ConversationScreen(props: {
     };
   }, [speechToText]);
 
+  const handleHelp = () => {
+    setHelpRequested(true);
+    void requestStaffHelp(configRef.current).catch(() => {
+      setNotice("Please wave to a staff member.");
+    });
+  };
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.headingRow}>
-          <View style={styles.headingText}>
-            <Text style={styles.title}>Hands-free patient conversation</Text>
-            <Text style={styles.subtitle}>Local VAD + Whisper → ACU text API</Text>
-          </View>
-          <View style={[styles.indicator, indicatorStyle(phase)]} />
-        </View>
-
-        <View style={styles.statePanel}>
-          <Text style={styles.state}>{stateLabels[phase]}</Text>
-          <Text style={styles.hint}>
-            No recording button is needed. A short pause ends the sentence and sends only recognized text to ACU.
-          </Text>
-        </View>
-
-        <View style={styles.identityPanel}>
-          <Text style={styles.identity}>{props.config.deviceId}</Text>
-          <Text style={styles.identityDetail}>{props.config.baseUrl} · {props.config.mac}</Text>
-          <ActionButton label="Change setup" onPress={props.onChangeSetup} />
-        </View>
-
-        <LanguageSelector language={props.config.language} onChange={props.onLanguageChange} />
-
-        <Text style={styles.label}>Last recognized sentence</Text>
-        <View style={styles.transcriptPanel}>
-          <Text style={styles.transcript}>{transcript || "Waiting for the patient to speak…"}</Text>
-        </View>
-        <Text style={styles.label}>Last ACU answer</Text>
-        <View style={styles.answerPanel}>
-          <Text style={styles.transcript}>{answer || "Waiting for an ACU answer…"}</Text>
-        </View>
-        <Text style={styles.message}>{message}</Text>
-      </ScrollView>
-    </SafeAreaView>
+    <PatientScreen
+      phase={phase}
+      isSpeaking={isSpeaking}
+      messages={messages}
+      helpRequested={helpRequested}
+      onRequestHelp={handleHelp}
+      onStaffSetup={props.onChangeSetup}
+      notice={notice}
+    />
   );
 }
 

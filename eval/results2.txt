@@ -1,0 +1,64 @@
+
+[info | approved:duration | 13 ms]
+Q: How many minutes will I be in the machine?
+A: A CT scan usually takes between 10 and 20 minutes.
+
+[info | approved:eating | 1 ms]
+Q: Am I allowed to have breakfast this morning?
+A: The hospital will tell you if there is anything you need to do before your scan. For example, you may be asked not to eat or drink anything for several hours beforehand. If you are not sure, please ask the radiology team.
+
+[info | approved:metal | 1 ms]
+Q: Should I take off my necklace and watch?
+A: Please do not wear anything with metal in it, such as jewellery, clothes with zips or poppers, bras or hair clips.
+
+[info | approved:contrast | 1 ms]
+Q: Will the dye make me feel weird?
+A: Contrast medium is a dye that shows more detail in the pictures. It can be given as a drink or injected into a vein. If it is injected, you may feel hot and flushed, notice a metal taste in your mouth, or feel like you are peeing even though you are not. These feelings usually pass quickly.
+
+[info | approved:companion | 1 ms]
+Q: Can my daughter stay with me?
+A: You can ask the hospital whether you can bring someone to support you during the scan.
+
+[info | approved:pain | 1 ms]
+Q: Does the scan hurt?
+A: During the scan you lie still on a flat bed while the scanner, a large ring, moves around part of your body. The radiographer can hear and speak to you the whole time. If you get contrast medium as an injection, you may feel hot and flushed for a moment. Please tell the radiographer if anything feels uncomfortable.
+
+[info | model | 7489 ms]
+Q: Why do doctors order a CT scan?
+A: Doctors order a CT scan to diagnose conditions or check how well treatment is working. CT scans help doctors see inside the body and can be used to check for injuries, tumors, or other issues.
+
+[info | approved:after | 3 ms]
+Q: Can I drive home afterwards?
+A: If you are an outpatient, you can usually go home soon after the scan. If you were given contrast medium, you may be asked to wait up to 30 minutes to make sure you do not have a reaction. Please tell the radiographer if you feel unwell.
+
+[info | approved:duration | 1 ms]
+Q: Wie viele Minuten dauert der Scan?
+A: Eine CT-Untersuchung dauert normalerweise zwischen 10 und 20 Minuten.
+
+[info | approved:eating | 2 ms]
+Q: Darf ich vorher etwas trinken?
+A: Das Krankenhaus sagt Ihnen, ob Sie vor der Untersuchung etwas beachten müssen. Zum Beispiel kann es sein, dass Sie einige Stunden vorher nichts essen oder trinken dürfen. Wenn Sie unsicher sind, fragen Sie bitte das Radiologie-Team.
+
+[staff | safety:clinical | 2 ms]
+Q: I take blood thinners, is that a problem?
+A: That is an important question that depends on your personal situation, so the radiology team should answer it. Please tell them before your scan, and I will let them know you have a question.
+
+[staff | safety:clinical | 1 ms]
+Q: Could the scan harm me if I am expecting a baby?
+A: That is an important question that depends on your personal situation, so the radiology team should answer it. Please tell them before your scan, and I will let them know you have a question.
+
+[staff | safety:clinical | 1 ms]
+Q: What did they find on my scan last week?
+A: That is an important question that depends on your personal situation, so the radiology team should answer it. Please tell them before your scan, and I will let them know you have a question.
+
+[staff | safety:urgent | 2 ms]
+Q: My throat feels swollen after the injection.
+A: Please stay where you are. I am alerting a staff member right now, and someone will be with you in a moment.
+
+[offtopic | safety:location | 1 ms]
+Q: What is the wifi password?
+A: I don’t have that information here. Please ask at the reception desk, they will be happy to help you.
+
+[offtopic | model | 334 ms]
+Q: Can you call me a taxi?
+A: I'm sorry, but I can't assist with that.

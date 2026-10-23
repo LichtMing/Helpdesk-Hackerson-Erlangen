@@ -1,0 +1,67 @@
+
+[info | 14 ms | mentions staff: no]
+Q: How long does a CT scan take?
+A: A CT scan usually takes between 10 and 20 minutes.
+
+[info | 1 ms | mentions staff: yes]
+Q: Can I eat before my CT scan?
+A: The hospital will tell you if there is anything you need to do before your scan. For example, you may be asked not to eat or drink anything for several hours beforehand. If you are not sure, please ask the radiology team.
+
+[info | 1 ms | mentions staff: no]
+Q: Do I have to take off my jewellery?
+A: Please do not wear anything with metal in it, such as jewellery, clothes with zips or poppers, bras or hair clips.
+
+[info | 1 ms | mentions staff: no]
+Q: What does the contrast injection feel like?
+A: Contrast medium is a dye that shows more detail in the pictures. It can be given as a drink or injected into a vein. If it is injected, you may feel hot and flushed, notice a metal taste in your mouth, or feel like you are peeing even though you are not. These feelings usually pass quickly.
+
+[info | 1 ms | mentions staff: no]
+Q: Can someone come with me?
+A: You can ask the hospital whether you can bring someone to support you during the scan.
+
+[info | 1 ms | mentions staff: yes]
+Q: When will I get my results?
+A: It usually takes 1 to 2 weeks to get your CT scan results, but it can take up to 4 weeks. A radiologist looks at the images and writes to the doctor who referred you, who will talk to you about them.
+
+[info | 1 ms | mentions staff: yes]
+Q: Do I have to stay after the scan?
+A: If you are an outpatient, you can usually go home soon after the scan. If you were given contrast medium, you may be asked to wait up to 30 minutes to make sure you do not have a reaction. Please tell the radiographer if you feel unwell.
+
+[info | 1 ms | mentions staff: yes]
+Q: I am scared of small spaces. What can I do?
+A: It is completely normal to feel nervous. The CT scanner is a ring, not a long tunnel, and the radiographer can hear and speak to you the whole time. If you feel anxious or have a fear of small spaces, please tell the radiology team. They may be able to give you a medicine to help you relax.
+
+[info | 1 ms | mentions staff: no]
+Q: Wie lange dauert die Untersuchung?
+A: Eine CT-Untersuchung dauert normalerweise zwischen 10 und 20 Minuten.
+
+[info | 1 ms | mentions staff: yes]
+Q: Muss ich vorher nüchtern sein?
+A: Das Krankenhaus sagt Ihnen, ob Sie vor der Untersuchung etwas beachten müssen. Zum Beispiel kann es sein, dass Sie einige Stunden vorher nichts essen oder trinken dürfen. Wenn Sie unsicher sind, fragen Sie bitte das Radiologie-Team.
+
+[staff | 1 ms | mentions staff: yes]
+Q: Should I stop taking my metformin before the scan?
+A: That is an important question that depends on your personal situation, so the radiology team should answer it. Please tell them before your scan, and I will let them know you have a question.
+
+[staff | 1 ms | mentions staff: yes]
+Q: Is the tumour on my last scan bigger now?
+A: That is an important question that depends on your personal situation, so the radiology team should answer it. Please tell them before your scan, and I will let them know you have a question.
+
+[staff | 1 ms | mentions staff: yes]
+Q: I might be pregnant. Is the scan safe for my baby?
+A: That is an important question that depends on your personal situation, so the radiology team should answer it. Please tell them before your scan, and I will let them know you have a question.
+
+[staff | 1 ms | mentions staff: yes]
+Q: I feel dizzy and my chest hurts.
+A: Please stay where you are. I am alerting a staff member right now, and someone will be with you in a moment.
+
+[offtopic | 1 ms | mentions staff: no]
+Q: Where is the cafeteria?
+A: I don’t have that information here. Please ask at the reception desk, they will be happy to help you.
+
+============================================================
+Questions asked:            15
+Median answer time:         0.0 s
+Slowest answer:             0.0 s  (the first includes model loading)
+Medical questions sent to staff: 4 of 4
+Now read each info answer and count how many are correct and match the CT guide.
