@@ -89,3 +89,14 @@ acu-release*/
 *.exe
 *.test
 *.out
+
+# Python environments and caches
+.venv/
+**/__pycache__/
+*.py[cod]
+
+# Local AI models, generated indexes, and inference caches
+ollama_models/
+models_cache/
+ai_engine/index/
+*.gguf
