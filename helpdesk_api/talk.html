@@ -1,0 +1,84 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Helpdesk – Push to talk</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body{font-family:-apple-system,sans-serif;max-width:640px;margin:40px auto;padding:0 16px;background:#111;color:#eee}
+  #talk{width:100%;padding:40px;font-size:24px;border-radius:16px;border:none;background:#ec6602;color:#fff;cursor:pointer;user-select:none}
+  #talk.rec{background:#c00}
+  .box{background:#222;border-radius:12px;padding:16px;margin-top:16px}
+  small{color:#999} label{margin-right:16px}
+</style></head><body>
+<h1>Helpdesk – Push to talk</h1>
+<p>
+  <label>Language: <select id="lang"><option value="">Auto-detect</option><option value="de">Deutsch</option><option value="en">English</option></select></label>
+  <label><input type="checkbox" id="playhere" checked> Play answer here (no real robot)</label>
+</p>
+<button id="talk">Hold to talk</button>
+<div class="box"><small>You said</small><div id="you">–</div></div>
+<div class="box"><small>Robot answers</small><div id="answer">–</div><small id="meta"></small></div>
+<script>
+let ctx, stream, source, proc, chunks = [], sessionId = null, recording = false, starting = null;
+const btn = document.getElementById('talk');
+
+async function start() {
+  if (recording) return;
+  recording = true; chunks = [];
+  stream = await navigator.mediaDevices.getUserMedia({audio: true});
+  ctx = new AudioContext();
+  source = ctx.createMediaStreamSource(stream);
+  proc = ctx.createScriptProcessor(4096, 1, 1);
+  proc.onaudioprocess = e => chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+  source.connect(proc); proc.connect(ctx.destination);
+  btn.classList.add('rec'); btn.textContent = 'Listening… release to send';
+}
+
+async function stop() {
+  if (!recording) return;
+  await starting;
+  recording = false;
+  btn.classList.remove('rec'); btn.textContent = 'Thinking…';
+  proc.disconnect(); source.disconnect(); stream.getTracks().forEach(t => t.stop());
+  const rate = ctx.sampleRate; await ctx.close();
+  const wav = encodeWav(downsample(merge(chunks), rate, 16000), 16000);
+  const fd = new FormData();
+  fd.append('audio', wav, 'question.wav');
+  const lang = document.getElementById('lang').value;
+  if (lang) fd.append('lang', lang);
+  if (sessionId) fd.append('session_id', sessionId);
+  try {
+    const r = await fetch('/api/chat/audio', {method: 'POST', body: fd});
+    const j = await r.json();
+    if (j.session_id) sessionId = j.session_id;
+    document.getElementById('you').textContent = j.transcript || '(nothing understood – please try again)';
+    document.getElementById('answer').textContent = j.answer || '–';
+    document.getElementById('meta').textContent = j.lang ? `${j.lang} · ${j.latency_ms} ms · ${j.robot_delivery}` : '';
+    if (j.audio_url && document.getElementById('playhere').checked) new Audio(j.audio_url).play();
+  } catch (e) {
+    document.getElementById('answer').textContent = 'Error: ' + e;
+  }
+  btn.textContent = 'Hold to talk';
+}
+
+function merge(cs) { let n = cs.reduce((a, c) => a + c.length, 0), o = new Float32Array(n), p = 0; for (const c of cs) { o.set(c, p); p += c.length; } return o; }
+function downsample(b, from, to) {
+  if (from === to) return b;
+  const ratio = from / to, n = Math.floor(b.length / ratio), o = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const s = Math.floor(i * ratio), e = Math.min(Math.floor((i + 1) * ratio), b.length); let sum = 0; for (let j = s; j < e; j++) sum += b[j]; o[i] = sum / Math.max(1, e - s); }
+  return o;
+}
+function encodeWav(s, rate) {
+  const buf = new ArrayBuffer(44 + s.length * 2), v = new DataView(buf);
+  const w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + s.length * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, 'data'); v.setUint32(40, s.length * 2, true);
+  for (let i = 0; i < s.length; i++) { const x = Math.max(-1, Math.min(1, s[i])); v.setInt16(44 + i * 2, x < 0 ? x * 0x8000 : x * 0x7FFF, true); }
+  return new Blob([buf], {type: 'audio/wav'});
+}
+
+btn.addEventListener('pointerdown', () => { starting = start(); });
+btn.addEventListener('pointerup', stop);
+btn.addEventListener('pointerleave', stop);
+</script>
+</body></html>
