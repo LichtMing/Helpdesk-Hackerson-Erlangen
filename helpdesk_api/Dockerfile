@@ -9,7 +9,7 @@ COPY helpdesk_api/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --requirement requirements.txt \
     && useradd --create-home --uid 10001 appuser
 
-COPY --chown=appuser:appuser helpdesk_api/main.py ./main.py
+COPY --chown=appuser:appuser helpdesk_api/main.py helpdesk_api/gateway_client.py ./
 
 USER appuser
 EXPOSE 8000

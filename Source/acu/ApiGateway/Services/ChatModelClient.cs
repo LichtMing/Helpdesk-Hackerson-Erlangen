@@ -7,6 +7,7 @@ public interface IChatModelClient
     Task<ChatModelReply> CompleteAsync(
         IReadOnlyList<ConversationMessage> messages,
         string language,
+        string deviceId,
         CancellationToken cancellationToken);
 }
 
@@ -25,6 +26,7 @@ public sealed class DevelopmentChatModelClient(IConfiguration configuration) : I
     public Task<ChatModelReply> CompleteAsync(
         IReadOnlyList<ConversationMessage> messages,
         string language,
+        string deviceId,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

@@ -53,6 +53,7 @@ test("sends a Unicode chat turn and correlates the ACU answer", async () => {
       answer: "Development response",
       language: "en",
       isMock: true,
+      robotDelivery: "not_configured",
       generatedAt: "2026-10-22T12:00:00.000Z",
     }));
   }, async (baseUrl) => {
@@ -66,6 +67,7 @@ test("sends a Unicode chat turn and correlates the ACU answer", async () => {
     });
     assert.equal(reply.answer, "Development response");
     assert.equal(reply.isMock, true);
+    assert.equal(reply.robotDelivery, "not_configured");
   });
 });
 

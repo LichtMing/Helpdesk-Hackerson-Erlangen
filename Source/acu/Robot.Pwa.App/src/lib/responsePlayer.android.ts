@@ -1,6 +1,8 @@
 import { createAudioPlayer, setAudioModeAsync } from "expo-audio";
 import { File, Paths } from "expo-file-system";
 
+export async function prepareWavePlayback(): Promise<void> {}
+
 export async function playWaveResponse(audio: ArrayBuffer, requestId: string): Promise<void> {
   const safeId = requestId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80) || "response";
   const file = new File(Paths.cache, `acu-${safeId}.wav`);

@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test:config": "node --experimental-strip-types --test tests/robotConfig.test.mjs",
     "test:device": "node --experimental-strip-types --test tests/deviceApi.test.mjs",
+    "test:workflow": "node --experimental-strip-types --test tests/robotWorkflowApi.test.mjs",
     "test:transcript": "node --experimental-strip-types --test tests/transcriptApi.test.mjs",
     "test:conversation": "node --experimental-strip-types --test tests/conversationApi.test.mjs",
     "test:web": "playwright test",

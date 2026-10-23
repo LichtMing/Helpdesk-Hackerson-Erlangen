@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AppState,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -25,10 +26,15 @@ import {
   AcuHttpError,
   checkAcuHealth,
   getRegistrationStatus,
+  reportRobotOnline,
   registerRobot,
   verifyApprovedRobot,
 } from "./lib/deviceApi";
-import { playWaveResponse } from "./lib/responsePlayer";
+import { playWaveResponse, prepareWavePlayback } from "./lib/responsePlayer";
+import {
+  completeAnswerWorkflow,
+  startAssignedAnswerWorkflow,
+} from "./lib/robotWorkflowApi";
 import {
   DEFAULT_ROBOT_CONFIG,
   normalizeRobotConfig,
@@ -48,6 +54,8 @@ const stateLabels: Record<SpeechState, string> = {
   delivering: "Sending recognized text to ACU",
   stopped: "Listening paused",
 };
+
+const webSimulatorEnabled = Platform.OS === "web" && __DEV__;
 
 export default function App() {
   const [stage, setStage] = useState<AppStage>("loading");
@@ -308,12 +316,117 @@ function ConversationScreen(props: {
   const [answer, setAnswer] = useState("");
   const [phase, setPhase] = useState<SpeechState>("initializing");
   const [message, setMessage] = useState("Starting hands-free conversation mode…");
+  const [simulatedTranscript, setSimulatedTranscript] = useState("");
+  const [simulatorBusy, setSimulatorBusy] = useState(false);
   const sessionId = useRef(createSessionId());
   const configRef = useRef(props.config);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     configRef.current = props.config;
   }, [props.config]);
+
+  const deliverTranscript = useCallback(async (
+    text: string,
+    detectedLanguage: SpeechLanguage,
+  ) => {
+    if (!mountedRef.current) return;
+    setTranscript(text);
+    setMessage("Speech recognized; waiting for the ACU answer…");
+    const current = configRef.current;
+    const reply = await sendChat({
+      baseUrl: current.baseUrl,
+      deviceId: current.deviceId,
+      mac: current.mac,
+      sessionId: sessionId.current,
+      text,
+      language: detectedLanguage,
+    });
+    if (!mountedRef.current) return;
+    setAnswer(reply.answer);
+    let speechText = reply.answer;
+    let assignedWorkflowId: string | null = null;
+    if (reply.robotDelivery === "sent_to_robot_text_only") {
+      try {
+        const workflow = await startAssignedAnswerWorkflow(current);
+        speechText = workflow.speechText;
+        assignedWorkflowId = workflow.workflowId;
+        setMessage("Answer workflow received; preparing its TTS response…");
+      } catch (error) {
+        setMessage(`Workflow retrieval failed; using direct response fallback: ${errorMessage(error)}`);
+      }
+    } else {
+      setMessage(reply.isMock
+        ? "Development response received; using direct ACU speech fallback…"
+        : "Workflow delivery unavailable; using direct ACU speech fallback…");
+    }
+
+    const audio = await synthesizeSpeech(current, speechText, reply.language);
+    if (!mountedRef.current) return;
+    setMessage("The robot is speaking. Listening is paused to prevent echo.");
+    await playWaveResponse(audio, reply.requestId);
+    if (assignedWorkflowId) {
+      try {
+        await completeAnswerWorkflow(current, assignedWorkflowId);
+      } catch (error) {
+        if (mountedRef.current) {
+          setMessage(`Answer played, but workflow completion failed: ${errorMessage(error)}`);
+        }
+        return;
+      }
+    }
+    if (mountedRef.current) setMessage("Answer delivered; resuming hands-free listening.");
+  }, []);
+
+  const submitSimulatedTranscript = async () => {
+    const text = simulatedTranscript.trim();
+    if (!text) {
+      setMessage("Enter a simulated STT transcript before sending.");
+      return;
+    }
+    if (simulatorBusy) return;
+
+    setSimulatorBusy(true);
+    setPhase("delivering");
+    try {
+      // Resume the browser audio context while this trusted click is active.
+      await prepareWavePlayback();
+      await deliverTranscript(text, configRef.current.language);
+      if (mountedRef.current) setSimulatedTranscript("");
+    } catch (error) {
+      if (mountedRef.current) setMessage(`Simulation failed: ${errorMessage(error)}`);
+    } finally {
+      if (mountedRef.current) {
+        setSimulatorBusy(false);
+        setPhase("stopped");
+      }
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    const heartbeat = async () => {
+      try {
+        await reportRobotOnline(configRef.current);
+      } catch (error) {
+        if (mounted) setMessage(`ACU heartbeat failed: ${errorMessage(error)}`);
+      }
+    };
+
+    void heartbeat();
+    const timer = setInterval(() => void heartbeat(), 10_000);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -324,31 +437,7 @@ function ConversationScreen(props: {
       onStateChange: (state: SpeechState) => {
         if (mounted) setPhase(state);
       },
-      onTranscript: async (text: string, detectedLanguage: SpeechLanguage) => {
-        if (!mounted) return;
-        setTranscript(text);
-        setMessage("Speech recognized; waiting for the ACU answer…");
-        const current = configRef.current;
-        const reply = await sendChat({
-          baseUrl: current.baseUrl,
-          deviceId: current.deviceId,
-          mac: current.mac,
-          sessionId: sessionId.current,
-          text,
-          language: detectedLanguage,
-        });
-        if (!mounted) return;
-        setAnswer(reply.answer);
-        setMessage(reply.isMock
-          ? "Development response received; requesting ACU speech…"
-          : "ACU answer received; requesting ACU speech…");
-
-        const audio = await synthesizeSpeech(current, reply.answer, reply.language);
-        if (!mounted) return;
-        setMessage("The robot is speaking. Listening is paused to prevent echo.");
-        await playWaveResponse(audio, reply.requestId);
-        if (mounted) setMessage("Answer delivered; resuming hands-free listening.");
-      },
+      onTranscript: deliverTranscript,
       onError: (error: Error) => {
         if (mounted) setMessage(error.message);
       },
@@ -369,15 +458,24 @@ function ConversationScreen(props: {
       }
     };
 
-    void startListening();
+    if (webSimulatorEnabled) {
+      setPhase("stopped");
+      setMessage("Development web simulator ready. Enter a transcript to exercise the real ACU pipeline.");
+    } else {
+      void startListening();
+    }
     const appStateSubscription = AppState.addEventListener("change", (nextState) => {
       if (!mounted) return;
       if (nextState === "active") {
-        setMessage("App active; resuming hands-free listening…");
-        void startListening();
+        if (!webSimulatorEnabled) {
+          setMessage("App active; resuming hands-free listening…");
+          void startListening();
+        }
       } else {
-        setMessage("App is in the background; microphone listening is paused.");
-        void speechToText.stop();
+        if (!webSimulatorEnabled) {
+          setMessage("App is in the background; microphone listening is paused.");
+          void speechToText.stop();
+        }
       }
     });
 
@@ -389,7 +487,7 @@ function ConversationScreen(props: {
         // The server-side idle timeout remains the fallback if shutdown interrupts reset.
       });
     };
-  }, [speechToText]);
+  }, [deliverTranscript, speechToText]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -397,7 +495,9 @@ function ConversationScreen(props: {
         <View style={styles.headingRow}>
           <View style={styles.headingText}>
             <Text style={styles.title}>Hands-free patient conversation</Text>
-            <Text style={styles.subtitle}>Local VAD + Whisper → ACU text API</Text>
+            <Text style={styles.subtitle}>
+              {webSimulatorEnabled ? "Development transcript simulator → ACU text API" : "Local VAD + Whisper → ACU text API"}
+            </Text>
           </View>
           <View style={[styles.indicator, indicatorStyle(phase)]} />
         </View>
@@ -405,7 +505,9 @@ function ConversationScreen(props: {
         <View style={styles.statePanel}>
           <Text style={styles.state}>{stateLabels[phase]}</Text>
           <Text style={styles.hint}>
-            No recording button is needed. A short pause ends the sentence and sends only recognized text to ACU.
+            {webSimulatorEnabled
+              ? "Development-only mode: type the text that local Android STT would have produced."
+              : "No recording button is needed. A short pause ends the sentence and sends only recognized text to ACU."}
           </Text>
         </View>
 
@@ -416,6 +518,32 @@ function ConversationScreen(props: {
         </View>
 
         <LanguageSelector language={props.config.language} onChange={props.onLanguageChange} />
+
+        {webSimulatorEnabled ? (
+          <View style={styles.simulatorPanel}>
+            <Text style={styles.state}>Robot simulator</Text>
+            <Text style={styles.hint}>
+              This sends text to the real ACU chat endpoint, requests real Piper audio, and plays it in this browser.
+            </Text>
+            <TextInput
+              accessibilityLabel="Simulated STT transcript"
+              style={[styles.input, styles.simulatorInput]}
+              value={simulatedTranscript}
+              onChangeText={setSimulatedTranscript}
+              placeholder="What should I do before my CT scan?"
+              placeholderTextColor="#789597"
+              multiline
+              editable={!simulatorBusy}
+              onSubmitEditing={() => void submitSimulatedTranscript()}
+            />
+            <ActionButton
+              label={simulatorBusy ? "Running conversation…" : "Send simulated transcript"}
+              onPress={() => void submitSimulatedTranscript()}
+              primary
+              disabled={simulatorBusy}
+            />
+          </View>
+        ) : null}
 
         <Text style={styles.label}>Last recognized sentence</Text>
         <View style={styles.transcriptPanel}>
@@ -487,11 +615,16 @@ function Field(props: { label: string; value: string; onChangeText(value: string
   );
 }
 
-function ActionButton(props: { label: string; onPress(): void; primary?: boolean }) {
+function ActionButton(props: { label: string; onPress(): void; primary?: boolean; disabled?: boolean }) {
   return (
     <TouchableOpacity
       accessibilityRole="button"
-      style={[styles.button, props.primary && styles.buttonPrimary]}
+      disabled={props.disabled}
+      style={[
+        styles.button,
+        props.primary && styles.buttonPrimary,
+        props.disabled && styles.buttonDisabled,
+      ]}
       onPress={props.onPress}
     >
       <Text style={styles.buttonText}>{props.label}</Text>
@@ -558,6 +691,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 16,
   },
+  simulatorPanel: {
+    backgroundColor: "#102a2d",
+    borderColor: "#f0a050",
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 16,
+    gap: 12,
+  },
+  simulatorInput: { minHeight: 86, textAlignVertical: "top" },
   transcript: { color: "#ffffff", fontSize: 20, lineHeight: 28 },
   message: { color: "#f0a050", fontSize: 16, lineHeight: 23, textAlign: "center" },
   buttonRow: { flexDirection: "row", gap: 12, flexWrap: "wrap" },
@@ -570,6 +712,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   buttonPrimary: { backgroundColor: "#008c95" },
+  buttonDisabled: { opacity: 0.55 },
   buttonText: { color: "#ffffff", fontWeight: "700" },
   identityPanel: { backgroundColor: "#102a2d", borderRadius: 8, padding: 14, gap: 6 },
   identity: { color: "#ffffff", fontSize: 18, fontWeight: "700" },

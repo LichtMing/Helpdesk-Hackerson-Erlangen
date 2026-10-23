@@ -28,7 +28,7 @@ public sealed class ConversationService(
                 using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
                     cancellationToken, session.ResetSource.Token);
                 var reply = await modelClient.CompleteAsync(
-                    session.Messages.ToArray(), language, linkedCancellation.Token);
+                    session.Messages.ToArray(), language, deviceId, linkedCancellation.Token);
                 session.Messages.Add(new ConversationMessage("assistant", reply.Text));
                 sessionStore.Trim(session);
                 return reply;

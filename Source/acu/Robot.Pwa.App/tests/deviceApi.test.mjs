@@ -6,6 +6,7 @@ import {
   AcuHttpError,
   checkAcuHealth,
   getRegistrationStatus,
+  reportRobotOnline,
   registerRobot,
   verifyApprovedRobot,
 } from "../src/lib/deviceApi.ts";
@@ -67,6 +68,13 @@ test("checks health, registers, polls approval, and verifies MAC", async () => {
       response.end(JSON.stringify({ status: "approved", deviceId: "robot-001" }));
       return;
     }
+    if (request.url === "/api/bot/device-status/robot-001") {
+      assert.equal(request.method, "POST");
+      assert.deepEqual(await readJson(request), { mac: config.mac });
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ message: "Status updated" }));
+      return;
+    }
     assert.equal(
       request.url,
       "/api/bot/instructions/robot-001?mac=AA%3ABB%3ACC%3ADD%3AEE%3AFF",
@@ -79,8 +87,9 @@ test("checks health, registers, polls approval, and verifies MAC", async () => {
     await registerRobot(identity);
     assert.equal(await getRegistrationStatus(identity), "approved");
     await verifyApprovedRobot(identity);
+    await reportRobotOnline(identity);
   });
-  assert.equal(calls, 4);
+  assert.equal(calls, 5);
 });
 
 test("preserves ACU status and error detail", async () => {

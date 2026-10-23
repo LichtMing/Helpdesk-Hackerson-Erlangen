@@ -1,6 +1,7 @@
 services:
 
   backend:
+    image: acu-backend:local
     build:
       context: .                      # root — so both ApiGateway/ and BE/ are in scope
       dockerfile: ApiGateway/Dockerfile
@@ -9,6 +10,7 @@ services:
       - "3000:3000"
     volumes:
       - acu-data:/data                # persists devices.json & workflows.json across restarts
+      - piper-models:/models:ro       # persisted Piper ONNX voices
     environment:
       - DataPath=/data/devices.json
       - WorkflowDataPath=/data/workflows.json
@@ -19,14 +21,49 @@ services:
       - Conversation__MaxTurns=6
       - Helpdesk__Enabled=true
       - Helpdesk__BaseUrl=http://helpdesk-api:8000
-      - Helpdesk__TimeoutSeconds=60
+      # Keep the outer gateway timeout above the Ollama timeout so the
+      # adapter can return a useful 503 after a slow cold start.
+      - Helpdesk__TimeoutSeconds=150
       - Tts__Enabled=true
+      - Tts__Provider=Piper
+      - Tts__PiperExecutable=python3
+      - Tts__PiperScript=/app/piper_synthesize.py
+      - Tts__ModelDirectory=/models
+      - Tts__EnglishVoice=en_US-lessac-medium
+      - Tts__GermanVoice=de_DE-thorsten-medium
+      - Tts__ChineseVoice=zh_CN-huayan-medium
+      - Tts__LengthScale=1.0
+      - Tts__SentenceSilenceSeconds=0.15
+      - Tts__TimeoutSeconds=60
       - Tts__Executable=espeak-ng
-      - ASPNETCORE_ENVIRONMENT=Development
+      - Logging__LogLevel__Default=Information
+      - Logging__LogLevel__Microsoft.AspNetCore=Warning
+      - CommunicationLogging__IncludeText=true
+      - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://0.0.0.0:3000   # override appsettings so the container listens on all interfaces
+    depends_on:
+      piper-model-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
+  # One-shot download into a named volume. Existing verified voice files are
+  # reused on later starts and are never committed to Git.
+  piper-model-init:
+    image: acu-backend:local
+    pull_policy: never
+    entrypoint: ["python3", "/app/prepare_piper_voices.py", "--data-dir", "/models"]
+    command:
+      - en_US-lessac-medium
+      - de_DE-thorsten-medium
+      - zh_CN-huayan-medium
+    volumes:
+      - piper-models:/models
+    restart: "no"
+
+  # The operator dashboard is preserved, but it is not part of the default
+  # headless ACU runtime. Start it explicitly with --profile dashboard.
   frontend:
+    profiles: ["dashboard"]
     build:
       context: ./ACU.FE
       dockerfile: Dockerfile
@@ -37,16 +74,20 @@ services:
       - backend
     restart: unless-stopped
 
-  # Internal text-only AI boundary. The robot sends recognized text to the
-  # .NET gateway; raw microphone audio never enters this service.
+  # Internal text-only AI boundary. It is part of the default headless server.
+  # The robot sends recognized text; raw microphone audio never enters it.
   helpdesk-api:
-    profiles: ["ai"]
     build:
       context: ../..
       dockerfile: helpdesk_api/Dockerfile
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=ct-robot
+      # Qwen may need longer than 45 seconds when Ollama reloads it after idle.
+      - OLLAMA_TIMEOUT_SECONDS=120
+      - GATEWAY_URL=http://backend:3000
+      - ROBOT_DEVICE_ID=auto
+      - WORKFLOW_ID=erlangen-helpdesk-answer
     expose:
       - "8000"
     depends_on:
@@ -54,11 +95,8 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
-  # Optional local-development model runtime. Models live in a named volume
-  # and are never committed to Git. Do not enable this profile on the 4 GB
-  # target ACU until the final storage budget has been validated.
+  # Local Qwen runtime. Models live in a named volume and are never committed.
   ollama:
-    profiles: ["ai"]
     image: ollama/ollama:0.40.8
     expose:
       - "11434"
@@ -72,7 +110,6 @@ services:
     restart: unless-stopped
 
   ollama-model-init:
-    profiles: ["ai"]
     image: ollama/ollama:0.40.8
     environment:
       - OLLAMA_HOST=http://ollama:11434
@@ -100,3 +137,4 @@ services:
 volumes:
   acu-data:
   ollama-data:
+  piper-models:

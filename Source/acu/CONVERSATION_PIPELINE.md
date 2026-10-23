@@ -10,11 +10,12 @@ The existing event API reference is `Doc/api-guide.pdf`. That guide was checked 
 2. The robot sends only recognized text to `POST /api/chat`.
 3. ApiGateway validates that the device ID and MAC belong to an approved robot.
 4. `ConversationService` holds a bounded conversation history in process memory.
-5. `HelpdeskChatModelClient` sends the bounded text history to the internal `helpdesk-api`, which calls the local `ct-robot` Ollama model. Raw audio, robot credentials, and persistent patient data are not sent to that service.
-6. The robot sends the answer text to `POST /api/tts`.
-7. The ACU runs offline eSpeak NG and streams a WAV response without creating an audio file.
-8. The robot stores the WAV only in its cache, pauses listening while it plays, deletes it, and resumes listening.
-9. `POST /api/reset`, the five-minute idle timeout, or gateway shutdown clears the application-level session memory.
+5. `HelpdeskChatModelClient` sends the bounded text history and requesting device ID to the internal `helpdesk-api`, which calls the local `ct-robot` Ollama model. Raw audio, robot credentials, and persistent patient data are not sent to that service.
+6. The helpdesk adapter calls `gateway_client.publish_answer` to assign a text/TTS response workflow to that robot through ApiGateway. If this delivery fails, the answer is still returned to the requesting app.
+7. On successful delivery, the Android app starts its assigned workflow, uses the workflow's TTS text, and marks the workflow complete after playback. If delivery or retrieval fails, it uses the answer returned by `/api/chat` instead.
+8. The selected text is sent to `POST /api/tts`; the ACU runs offline Piper neural TTS and streams a WAV response without creating an audio file.
+9. The robot stores the WAV only in its cache, pauses listening while it plays, deletes it, and resumes listening.
+10. `POST /api/reset`, the five-minute idle timeout, or gateway shutdown clears the application-level session memory.
 
 The ApiGateway continues to listen on port `3000`. Port `8000` is internal to the Compose network and must not be used by robots.
 
@@ -27,33 +28,32 @@ Robot Android app
   -> ApiGateway:3000 (public robot/API contract)
        -> helpdesk-api:8000 (internal text-only model adapter)
             -> Ollama:11434 (internal model runtime)
-       -> offline TTS
-ACU operator browser -> frontend:3100
+       -> offline Piper TTS
+Optional ACU operator browser -> frontend:3100 (`dashboard` profile only)
 ```
 
-- `backend` and `frontend` are the default development services.
-- `helpdesk-api`, `ollama`, and the one-shot `ollama-model-init` service are opt-in through the `ai` Compose profile. Neither internal port is published to the host.
+- `backend`, `helpdesk-api`, `ollama`, and the one-shot model initialization services form the default headless runtime. Only the gateway's port 3000 is published.
+- `frontend` is preserved under the optional `dashboard` profile and is not required for robot conversations.
 - `mdns` is opt-in through the `lan` profile because host multicast behavior differs on Docker Desktop.
 - `Robot.Pwa.App` remains an Android application because it needs microphone, native Whisper/VAD, and audio playback access.
 - `ai_engine/` currently contains retrieval experiments and evaluation material; it is not a runtime service.
 
-Validate the default stack without downloading the model runtime:
+Validate the Compose definition without starting containers:
 
 ```text
 docker compose config
-docker compose build backend
-docker compose up backend
 ```
 
-For the complete local conversation stack:
+Start the complete headless conversation server:
 
 ```text
-docker compose --profile ai up --build
+docker compose up --build -d
+docker compose logs --follow backend helpdesk-api ollama
 ```
 
-`ollama-model-init` creates `ct-robot` from `Modelfile.txt` and pulls its Qwen 2.5 1.5B base automatically when absent.
+`ollama-model-init` creates `ct-robot` from `Modelfile.txt` and pulls its Qwen 2.5 1.5B base automatically when absent. `piper-model-init` downloads the configured English, German, and Chinese ONNX voices into the persistent `piper-models` volume when absent.
 
-The Ollama image and `qwen2.5:1.5b` model are too large to assume they fit the challenge's stated 4 GB storage limit alongside the remaining stack. The `ai` profile is therefore a workstation integration environment until the target storage image is measured.
+The Ollama image and `qwen2.5:1.5b` model are too large to assume they fit the challenge's stated 4 GB storage limit alongside the remaining stack. Measure the final target image before deploying to the constrained ACU.
 
 ## Compatibility with the event API guide
 
@@ -107,7 +107,7 @@ When development responses are disabled and no real model adapter has been regis
 }
 ```
 
-The successful response is `audio/wav` with `Cache-Control: no-store`. The current Docker image installs eSpeak NG as the prototype offline engine. `ISpeechSynthesizer` is the replacement boundary for Piper or another approved engine.
+The successful response is `audio/wav` with `Cache-Control: no-store`. Piper receives text through stdin, builds the WAV in memory, and returns it through stdout. Set `Tts__Provider=Espeak` only when the low-resource fallback is explicitly required; the HTTP contract does not change.
 
 ### `POST /api/reset`
 
@@ -130,6 +130,13 @@ Conversation__EnableDevelopmentResponses=false
 Conversation__SessionIdleTimeoutMinutes=5
 Conversation__MaxTurns=6
 Tts__Enabled=true
+Tts__Provider=Piper
+Tts__PiperExecutable=python3
+Tts__PiperScript=/app/piper_synthesize.py
+Tts__ModelDirectory=/models
+Tts__EnglishVoice=en_US-lessac-medium
+Tts__GermanVoice=de_DE-thorsten-medium
+Tts__ChineseVoice=zh_CN-huayan-medium
 Tts__Executable=espeak-ng
 ```
 
@@ -154,9 +161,9 @@ Conversation__EnableDevelopmentResponses=false
 ## Privacy boundary
 
 - Raw microphone audio remains on the robot.
-- Patient text is not added to `DeviceStore`, workflow JSON, or application logs.
+- Patient text is not added to `DeviceStore` or workflow JSON. The development Compose configuration deliberately prints `COMM_TEXT` lines for debugging; disable `CommunicationLogging__IncludeText` before handling real patient data.
 - Conversation history is process-local, bounded, resettable, and expires automatically.
 - Generated WAV is not written to ACU disk; the robot deletes its temporary cache file after playback.
 - Managed .NET strings cannot provide forensic byte-for-byte RAM erasure. The implemented guarantee is no application-level persistence and prompt release of references, not literal physical-memory zeroization.
 
-Before distributing a product image, review the eSpeak NG/Piper engine and selected voice licenses under the organization's third-party software policy.
+Before distributing a product image, review Piper's GPL-3.0-or-later license and every selected voice model/dataset license under the organization's third-party software policy. The German Thorsten dataset is CC0; the Huayan model card currently lists its dataset license as unknown, so replace or clear that voice before production distribution if the organization cannot approve it.

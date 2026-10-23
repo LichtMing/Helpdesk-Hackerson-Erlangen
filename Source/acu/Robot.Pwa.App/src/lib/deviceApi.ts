@@ -124,3 +124,23 @@ export async function verifyApprovedRobot(
   );
   if (!response.ok) throw await readError(response);
 }
+
+export async function reportRobotOnline(
+  config: Pick<RobotConfig, "baseUrl" | "deviceId" | "mac">,
+  fetchImpl: FetchLike = fetch,
+): Promise<void> {
+  const response = await request(
+    endpoint(
+      config.baseUrl,
+      `/api/bot/device-status/${encodeURIComponent(config.deviceId)}`,
+    ),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mac: config.mac }),
+    },
+    5_000,
+    fetchImpl,
+  );
+  if (!response.ok) throw await readError(response);
+}

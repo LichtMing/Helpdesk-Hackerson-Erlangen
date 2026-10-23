@@ -73,7 +73,17 @@ src/lib/transcriptApi.ts
   retained UTF-8 transport test for the older transcript endpoint
 ~~~
 
-`speechToText.ts` and `responsePlayer.ts` are non-Android stubs. The web command previews layout only; it does not test native recording or inference.
+`speechToText.ts` and `responsePlayer.ts` are non-Android fallbacks. The Web build does not test native recording or local Whisper/VAD inference.
+
+In a development Web build, the conversation screen exposes a robot simulator. It accepts a manually entered STT transcript, calls the real ACU `/api/chat` and `/api/tts` endpoints, and plays the returned WAV through the browser. This panel is excluded from production Web builds and never replaces Android Whisper/VAD.
+
+With the ACU stack running, start it from this directory with:
+
+~~~text
+npm run web -- --port 8082
+~~~
+
+Open `http://localhost:8082`, configure the ACU URL as `http://localhost:3000`, and connect an approved test robot. The simulator appears on the conversation screen.
 
 ## Later development APK build
 

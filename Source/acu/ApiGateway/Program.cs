@@ -71,7 +71,7 @@ if (builder.Configuration.GetValue("Helpdesk:Enabled", false))
         var baseUrl = configuration["Helpdesk:BaseUrl"] ?? "http://helpdesk-api:8000";
         client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
         client.Timeout = TimeSpan.FromSeconds(
-            Math.Clamp(configuration.GetValue("Helpdesk:TimeoutSeconds", 60), 5, 180));
+            Math.Clamp(configuration.GetValue("Helpdesk:TimeoutSeconds", 150), 5, 180));
     });
 }
 else
@@ -79,7 +79,19 @@ else
     builder.Services.AddSingleton<IChatModelClient, DevelopmentChatModelClient>();
 }
 builder.Services.AddSingleton<ConversationService>();
-builder.Services.AddSingleton<ISpeechSynthesizer, EspeakSpeechSynthesizer>();
+var ttsProvider = builder.Configuration["Tts:Provider"]?.Trim().ToLowerInvariant() ?? "piper";
+switch (ttsProvider)
+{
+    case "piper":
+        builder.Services.AddSingleton<ISpeechSynthesizer, PiperSpeechSynthesizer>();
+        break;
+    case "espeak":
+        builder.Services.AddSingleton<ISpeechSynthesizer, EspeakSpeechSynthesizer>();
+        break;
+    default:
+        throw new InvalidOperationException(
+            $"Unsupported TTS provider '{ttsProvider}'. Use 'Piper' or 'Espeak'.");
+}
 
 // ── WebSocket services ─────────────────────────────────────────────────────
 builder.Services.AddSingleton<BotConnectionManager>();

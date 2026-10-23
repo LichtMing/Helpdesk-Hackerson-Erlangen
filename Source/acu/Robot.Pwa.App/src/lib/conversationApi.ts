@@ -17,6 +17,7 @@ export interface ChatReply {
   answer: string;
   language: string;
   isMock: boolean;
+  robotDelivery: string;
   generatedAt: string;
 }
 
@@ -103,6 +104,7 @@ export async function sendChat(
       !payload.answer.trim() ||
       typeof payload.language !== "string" ||
       typeof payload.isMock !== "boolean" ||
+      typeof payload.robotDelivery !== "string" ||
       typeof payload.generatedAt !== "string"
     ) {
       throw new Error("ACU 返回了无效的对话响应。");

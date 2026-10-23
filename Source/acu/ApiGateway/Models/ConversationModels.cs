@@ -4,4 +4,8 @@ namespace AcuApiGateway.Models;
 public sealed record ConversationMessage(string Role, string Content);
 
 /// <summary>Provider-neutral model result.</summary>
-public sealed record ChatModelReply(string Text, string Language, bool IsMock);
+public sealed record ChatModelReply(
+    string Text,
+    string Language,
+    bool IsMock,
+    string RobotDelivery = "not_configured");
