@@ -19,10 +19,10 @@ const checkOnly = process.argv.includes("--check");
 
 const models = [
   {
-    name: "ggml-base.bin",
-    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1f/ggml-base.bin",
-    size: 147_951_465,
-    sha256: "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+    name: "ggml-tiny.bin",
+    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1f/ggml-tiny.bin",
+    size: 77_691_713,
+    sha256: "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
   },
   {
     name: "ggml-silero-v6.2.0.bin",

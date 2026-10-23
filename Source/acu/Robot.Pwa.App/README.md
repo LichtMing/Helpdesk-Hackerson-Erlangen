@@ -11,7 +11,7 @@ Despite the historical name, this is an Expo/React Native Android application. I
 3. The validated configuration is stored on the device. Later launches recheck ACU availability, approval, and the matching MAC.
 4. After Android microphone permission is granted, 16 kHz mono PCM capture starts automatically.
 5. Local Silero VAD detects speech and ends the utterance after about 700 ms of silence.
-6. The multilingual whisper.cpp base model transcribes the utterance locally through `whisper.rn`.
+6. The multilingual whisper.cpp Tiny model transcribes the utterance locally through `whisper.rn`.
 7. The app sends the text to `POST /api/chat`. Raw microphone audio never goes to ACU.
 8. The app requests `POST /api/tts`, pauses listening, plays the returned WAV, deletes the temporary audio, and resumes listening.
 9. Moving the app to the background pauses the microphone. Returning to the foreground resumes it.
@@ -37,8 +37,10 @@ npm run models:check
 npm run typecheck
 npm run test:config
 npm run test:device
+npm run test:workflow
 npm run test:transcript
 npm run test:conversation
+npm run test:help
 ~~~
 
 `models:prepare` downloads pinned Whisper and Silero VAD assets and verifies their sizes and SHA-256 hashes. The binaries live in `android/app/src/main/assets/models/` and are intentionally ignored by Git.
@@ -52,13 +54,19 @@ Do not run `npm run prebuild` casually. Expo regenerates `android/`, so project-
 ~~~text
 src/App.tsx
   first-run setup, registration/approval, app lifecycle,
-  hands-free status, transcript, answer, and session reset
+  hands-free status, transcript, answer, workflow delivery, and session reset
+
+src/PatientScreen.tsx
+  native Android patient conversation UI, help request, and return action
 
 src/lib/configStorage.ts
   validated on-device robot configuration
 
 src/lib/deviceApi.ts
   ACU health, registration, approval polling, and MAC verification
+
+src/lib/helpRequest.ts
+  sends patient_help_requested to the existing ACU device-status endpoint
 
 src/lib/speechToText.android.ts
   microphone permission, PCM capture, Silero VAD, and local Whisper
@@ -100,8 +108,10 @@ That command first verifies both model assets, runs Gradle `assembleDebug`, and 
 - `npm run typecheck`: strict TypeScript validation.
 - `npm run test:config`: robot configuration normalization and corrupted-data handling.
 - `npm run test:device`: ACU health, registration, approval, MAC verification, and error propagation.
+- `npm run test:workflow`: answer workflow retrieval, robot validation, and completion acknowledgement.
 - `npm run test:transcript`: Unicode transcript transport and rejected-device handling.
 - `npm run test:conversation`: chat correlation, WAV validation, reset, and unavailable-model errors.
+- `npm run test:help`: patient help-event transport and English error reporting.
 - `npm run models:check`: missing/corrupted embedded model detection.
 - `adb logcat`: native Android, microphone, Whisper, and playback diagnostics.
 

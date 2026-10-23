@@ -17,6 +17,7 @@
     "test:workflow": "node --experimental-strip-types --test tests/robotWorkflowApi.test.mjs",
     "test:transcript": "node --experimental-strip-types --test tests/transcriptApi.test.mjs",
     "test:conversation": "node --experimental-strip-types --test tests/conversationApi.test.mjs",
+    "test:help": "node --experimental-strip-types --test tests/helpRequest.test.mjs",
     "test:web": "playwright test",
     "ios": "expo run:ios"
   },
@@ -38,6 +39,7 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.4",
+    "react-native-svg": "15.12.1",
     "react-native-web": "~0.21.0",
     "whisper.rn": "^0.7.4"
   },

@@ -35,6 +35,8 @@ import {
   completeAnswerWorkflow,
   startAssignedAnswerWorkflow,
 } from "./lib/robotWorkflowApi";
+import { requestStaffHelp } from "./lib/helpRequest";
+import PatientScreen, { type ChatMessage } from "./PatientScreen";
 import {
   DEFAULT_ROBOT_CONFIG,
   normalizeRobotConfig,
@@ -318,6 +320,10 @@ function ConversationScreen(props: {
   const [message, setMessage] = useState("Starting hands-free conversation mode…");
   const [simulatedTranscript, setSimulatedTranscript] = useState("");
   const [simulatorBusy, setSimulatorBusy] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [helpRequested, setHelpRequested] = useState(false);
+  const [notice, setNotice] = useState("");
   const sessionId = useRef(createSessionId());
   const configRef = useRef(props.config);
   const mountedRef = useRef(false);
@@ -339,6 +345,11 @@ function ConversationScreen(props: {
   ) => {
     if (!mountedRef.current) return;
     setTranscript(text);
+    setNotice("");
+    setMessages((previous) => [
+      ...previous,
+      { id: `patient-${Date.now()}`, role: "patient" as const, text },
+    ].slice(-20));
     setMessage("Speech recognized; waiting for the ACU answer…");
     const current = configRef.current;
     const reply = await sendChat({
@@ -368,10 +379,25 @@ function ConversationScreen(props: {
         : "Workflow delivery unavailable; using direct ACU speech fallback…");
     }
 
+    setMessages((previous) => [
+      ...previous,
+      {
+        id: `assistant-${reply.requestId}`,
+        role: "assistant" as const,
+        text: speechText,
+        source: reply.isMock ? undefined : "ACU",
+      },
+    ].slice(-20));
+
     const audio = await synthesizeSpeech(current, speechText, reply.language);
     if (!mountedRef.current) return;
     setMessage("The robot is speaking. Listening is paused to prevent echo.");
-    await playWaveResponse(audio, reply.requestId);
+    setIsSpeaking(true);
+    try {
+      await playWaveResponse(audio, reply.requestId);
+    } finally {
+      if (mountedRef.current) setIsSpeaking(false);
+    }
     if (assignedWorkflowId) {
       try {
         await completeAnswerWorkflow(current, assignedWorkflowId);
@@ -383,6 +409,25 @@ function ConversationScreen(props: {
       }
     }
     if (mountedRef.current) setMessage("Answer delivered; resuming hands-free listening.");
+  }, []);
+
+  const requestHelp = useCallback(async () => {
+    if (helpRequested) return;
+    setHelpRequested(true);
+    setNotice("Requesting assistance from staff…");
+    try {
+      await requestStaffHelp(configRef.current);
+      if (mountedRef.current) setNotice("Staff have been notified.");
+    } catch (error) {
+      if (mountedRef.current) {
+        setNotice(`Unable to notify staff: ${errorMessage(error)}`);
+      }
+    }
+  }, [helpRequested]);
+
+  const returnToConversation = useCallback(() => {
+    setHelpRequested(false);
+    setNotice("Returned to the conversation.");
   }, []);
 
   const submitSimulatedTranscript = async () => {
@@ -488,6 +533,24 @@ function ConversationScreen(props: {
       });
     };
   }, [deliverTranscript, speechToText]);
+
+  if (Platform.OS === "android") {
+    return (
+      <PatientScreen
+        phase={phase}
+        isSpeaking={isSpeaking}
+        messages={messages}
+        helpRequested={helpRequested}
+        notice={notice || message}
+        onAppendMessage={(chatMessage) => {
+          setMessages((previous) => [...previous, chatMessage].slice(-20));
+        }}
+        onRequestHelp={() => void requestHelp()}
+        onBackToConversation={returnToConversation}
+        onStaffSetup={props.onChangeSetup}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>

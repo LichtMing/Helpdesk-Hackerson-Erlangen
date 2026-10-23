@@ -10,10 +10,12 @@ npm run models:check
 The expected paths are:
 
 ~~~text
-android/app/src/main/assets/models/ggml-base.bin
+android/app/src/main/assets/models/ggml-tiny.bin
 android/app/src/main/assets/models/ggml-silero-v6.2.0.bin
 ~~~
 
-Do not replace `ggml-base.bin` with `ggml-base.en.bin`; the robot needs multilingual English, German, and Chinese recognition.
+`ggml-tiny.bin` is the selected multilingual model for the 4 GB robot target. It reduces APK size and on-device latency compared with Base while retaining English, German, and Chinese recognition. Do not replace it with `ggml-tiny.en.bin`, which is English-only.
+
+To switch back to Base for an accuracy comparison, update both `WHISPER_MODEL_ASSET` in `src/lib/speechTypes.ts` and the pinned model entry in `scripts/prepare-speech-models.mjs`; these values must always refer to the same file.
 
 Silero performs local voice activity detection. About 700 ms of silence ends an utterance, then Whisper transcribes it locally. Only the resulting text is sent to ACU.
