@@ -11,6 +11,7 @@
     "build:apk": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\build-apks.ps1",
     "typecheck": "tsc --noEmit",
     "test:transcript": "node --experimental-strip-types --test tests/transcriptApi.test.mjs",
+    "test:conversation": "node --experimental-strip-types --test tests/conversationApi.test.mjs",
     "test:web": "playwright test",
     "test:pudu": "node --experimental-strip-types --test tests/puduRequest.test.mjs",
     "ios": "expo run:ios"
@@ -24,6 +25,9 @@
     "ajv": "^8.17.1",
     "crypto-js": "^4.2.0",
     "expo": "~54.0.0",
+    "expo-asset": "~12.0.13",
+    "expo-audio": "~1.1.1",
+    "expo-file-system": "~19.0.24",
     "expo-font": "~14.0.12",
     "expo-linear-gradient": "~15.0.8",
     "expo-video": "~3.0.16",

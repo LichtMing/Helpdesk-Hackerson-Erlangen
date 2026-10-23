@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  createSessionId,
+  resetConversation,
+  sendChat,
+  synthesizeSpeech,
+} from "./lib/conversationApi";
+import { playWaveResponse } from "./lib/responsePlayer";
+import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -11,7 +18,6 @@ import {
 
 import { createSpeechToText } from "./lib/speechToText";
 import type { SpeechLanguage, SpeechState } from "./lib/speechTypes";
-import { sendTranscript } from "./lib/transcriptApi";
 
 const stateLabels: Record<SpeechState, string> = {
   initializing: "Loading local speech models",
@@ -29,8 +35,10 @@ export default function App() {
   const [mac, setMac] = useState("AA:BB:CC:DD:EE:FF");
   const [language, setLanguage] = useState<SpeechLanguage>("auto");
   const [transcript, setTranscript] = useState("");
+  const [answer, setAnswer] = useState("");
   const [phase, setPhase] = useState<SpeechState>("initializing");
   const [message, setMessage] = useState("Starting hands-free conversation mode…");
+  const sessionId = useRef(createSessionId());
   const settings = useRef({ baseUrl, deviceId, mac, language });
 
   useEffect(() => {
@@ -48,18 +56,27 @@ export default function App() {
       onTranscript: async (text) => {
         if (!mounted) return;
         setTranscript(text);
-        setMessage("Speech recognized; waiting for ACU receipt…");
+        setMessage("Speech recognized; waiting for the ACU answer…");
         const current = settings.current;
-        const receipt = await sendTranscript({
+        const reply = await sendChat({
           baseUrl: current.baseUrl,
           deviceId: current.deviceId,
           mac: current.mac,
+          sessionId: sessionId.current,
           text,
           language: current.language,
         });
-        if (mounted) {
-          setMessage(`ACU received the exact text at ${receipt.receivedAt}`);
-        }
+        if (!mounted) return;
+        setAnswer(reply.answer);
+        setMessage(reply.isMock
+          ? "Development response received; generating local speech…"
+          : "ACU answer received; generating local speech…");
+
+        const audio = await synthesizeSpeech(current, reply.answer, reply.language);
+        if (!mounted) return;
+        setMessage("The robot is speaking. Listening is paused to prevent echo.");
+        await playWaveResponse(audio, reply.requestId);
+        if (mounted) setMessage("Answer delivered; resuming hands-free listening.");
       },
       onError: (error) => {
         if (mounted) setMessage(error.message);
@@ -74,6 +91,9 @@ export default function App() {
     return () => {
       mounted = false;
       void speechToText.release();
+      void resetConversation(settings.current, sessionId.current).catch(() => {
+        // The server-side idle timeout remains the fallback if shutdown interrupts reset.
+      });
     };
   }, [speechToText]);
 
@@ -118,6 +138,12 @@ export default function App() {
         <View style={styles.transcriptPanel}>
           <Text style={styles.transcript}>
             {transcript || "Waiting for the patient to speak…"}
+          </Text>
+        </View>
+        <Text style={styles.label}>Last ACU answer</Text>
+        <View style={styles.answerPanel}>
+          <Text style={styles.transcript}>
+            {answer || "Waiting for an ACU answer…"}
           </Text>
         </View>
         <Text style={styles.message}>{message}</Text>
@@ -185,6 +211,14 @@ const styles = StyleSheet.create({
     minHeight: 140,
     backgroundColor: "#102a2d",
     borderColor: "#287d7d",
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 16,
+  },
+  answerPanel: {
+    minHeight: 140,
+    backgroundColor: "#0d3034",
+    borderColor: "#00a7ad",
     borderWidth: 1,
     borderRadius: 8,
     padding: 16,

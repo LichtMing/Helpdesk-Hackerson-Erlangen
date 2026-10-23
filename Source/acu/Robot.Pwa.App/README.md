@@ -1,6 +1,6 @@
 # Robot PWA App
 
-Robot PWA is the robot-facing Android companion app for Alfred Control Unit (ACU). The current implementation is a focused speech-to-text and text-transport verification client.
+Robot PWA is the robot-facing Android companion app for Alfred Control Unit (ACU). It captures speech locally, sends only text to ACU, receives an answer, plays ACU-generated offline speech, and resumes listening automatically.
 
 ## Current STT integration
 
@@ -9,10 +9,12 @@ The `feat/robot-stt-to-acu` branch contains a focused Android verification flow:
 1. After the one-time Android microphone permission, the app starts listening automatically.
 2. Local Silero VAD detects speech and ends an utterance after about 700 ms of silence.
 3. `whisper.rn` runs the multilingual whisper.cpp `base` model locally on the robot.
-4. The recognized text is posted automatically to `POST /api/bot/transcripts/{deviceId}`.
-5. ACU validates the registered/approved robot and echoes the exact text plus `requestId`; the client rejects a mismatched echo and then resumes listening.
+4. The recognized text is posted automatically to `POST /api/chat` with a temporary `sessionId`.
+5. ACU validates the registered/approved robot and returns an answer. Until the Ollama adapter is ready, Development mode returns an explicitly marked `isMock: true` integration response.
+6. The app requests `POST /api/tts`, plays the returned WAV while microphone capture remains paused, deletes the temporary cache file, and resumes listening.
+7. On app shutdown it calls `POST /api/reset`; the ACU idle timeout is the fallback when shutdown interrupts the request.
 
-This endpoint is only a transport boundary. It does not store the patient's text and does not call Qwen yet.
+The older `POST /api/bot/transcripts/{deviceId}` endpoint remains available as a focused UTF-8 transport check. Neither endpoint writes patient conversation text to the JSON stores. Qwen/Ollama integration is intentionally not part of the current branch.
 
 ### Prepare the model
 
@@ -37,6 +39,7 @@ Do not use `ggml-base.en.bin`; that variant is English-only. Both `.bin` files a
 npm ci
 npm run typecheck
 npm run test:transcript
+npm run test:conversation
 npm run android
 ```
 
@@ -48,9 +51,9 @@ The Android app defaults to `http://10.0.2.2:3000`, which reaches the host machi
 
 ```text
 src/App.tsx
-  ├── hands-free conversation status and last transcript
+  ├── hands-free conversation status, last transcript, and last ACU answer
   ├── ACU URL, device ID, MAC, and language inputs
-  └── send button and exact-text receipt status
+  └── automatic chat, TTS playback, and session reset
 
 src/lib/speechToText.android.ts
   ├── Android microphone permission
@@ -59,7 +62,13 @@ src/lib/speechToText.android.ts
   └── local whisper.cpp inference through whisper.rn
 
 src/lib/transcriptApi.ts
-  └── POST /api/bot/transcripts/{deviceId} with timeout and receipt validation
+  └── retained POST /api/bot/transcripts/{deviceId} transport check
+
+src/lib/conversationApi.ts
+  └── POST /api/chat, POST /api/tts, and POST /api/reset contracts
+
+src/lib/responsePlayer.android.ts
+  └── temporary WAV cache, playback, and immediate deletion
 ```
 
 `speechToText.ts` is a non-Android stub so the UI can still be bundled for the web, but recording and Whisper inference are Android-only.
@@ -99,6 +108,7 @@ On the app screen:
 
 - `npm run typecheck` performs strict TypeScript checking.
 - `npm run test:transcript` starts a temporary HTTP server and verifies the JSON route, Unicode text, exact echo, and rejected-device error path.
+- `npm run test:conversation` verifies Unicode chat transport, request/session correlation, WAV validation, reset, and model-unavailable errors.
 - `npm run web` previews the screen layout only; browser recording is intentionally unsupported.
 
 For Android diagnostics, use `adb logcat`. The release build currently uses the debug keystore and must be given a production signing configuration before distribution.

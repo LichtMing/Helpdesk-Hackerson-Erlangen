@@ -25,6 +25,12 @@ RUN dotnet publish ApiGateway/ApiGateway.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
+# Offline prototype TTS. The gateway reads WAV bytes from stdout and never
+# writes patient text or generated audio to the container filesystem.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends espeak-ng \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /app/publish .
 
 VOLUME ["/data"]

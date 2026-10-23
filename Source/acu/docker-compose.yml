@@ -13,6 +13,12 @@ services:
       - DataPath=/data/devices.json
       - WorkflowDataPath=/data/workflows.json
       - RobotWorkflowDataPath=/data/robot-workflows.json
+      - AcuSettingsDataPath=/data/acu-settings.json
+      - Conversation__EnableDevelopmentResponses=true
+      - Conversation__SessionIdleTimeoutMinutes=5
+      - Conversation__MaxTurns=6
+      - Tts__Enabled=true
+      - Tts__Executable=espeak-ng
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://0.0.0.0:3000   # override appsettings so the container listens on all interfaces
     restart: unless-stopped

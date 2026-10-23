@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AcuApiGateway.WebSockets;
+using AcuApiGateway.Services;
 using Acu.Storage.Store;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -58,6 +59,13 @@ builder.Services.AddSingleton<AcuApiGateway.Services.RobotMediaService>();
 
 // ── Singleton store (backed by AcuSettingsDataPath) ────────────────────────
 builder.Services.AddSingleton<AcuSettingsStore>();
+
+// ── Patient conversation (memory only; no transcript persistence) ─────────
+builder.Services.AddSingleton<ConversationSessionStore>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ConversationSessionStore>());
+builder.Services.AddSingleton<IChatModelClient, DevelopmentChatModelClient>();
+builder.Services.AddSingleton<ConversationService>();
+builder.Services.AddSingleton<ISpeechSynthesizer, EspeakSpeechSynthesizer>();
 
 // ── WebSocket services ─────────────────────────────────────────────────────
 builder.Services.AddSingleton<BotConnectionManager>();
