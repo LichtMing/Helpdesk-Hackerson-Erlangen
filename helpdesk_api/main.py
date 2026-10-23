@@ -1,10 +1,12 @@
-import time, uuid
-from fastapi import FastAPI
+import os, time, uuid
+from fastapi import FastAPI, File, Form, UploadFile
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-import gateway_client, tts
+import gateway_client, tts, stt
 
 app = FastAPI(title="ACU Helpdesk API")
 SESSIONS: dict[str, dict] = {}   # kept in memory only, never written to disk
+HERE = os.path.dirname(__file__)
 
 class ChatIn(BaseModel):
     message: str
@@ -24,15 +26,28 @@ def deliver_to_robot(answer, lang):
     """Generate speech, upload it, publish to the robot. Falls back to text if audio fails."""
     try:
         audio = tts.synthesize(answer, lang)
-        audio_path = gateway_client.upload_audio(audio)
-        gateway_client.publish_answer(answer, audio_path)
-        return "sent_to_robot_with_audio"
+        path = gateway_client.upload_audio(audio)
+        gateway_client.publish_answer(answer, path)
+        return "sent_to_robot_with_audio", gateway_client.GATEWAY_URL.rstrip("/") + path
     except Exception as audio_error:
         try:
             gateway_client.publish_answer(answer)
-            return f"sent_to_robot_text_only (audio failed: {audio_error})"
+            return f"sent_to_robot_text_only (audio failed: {audio_error})", None
         except Exception as e:
-            return f"robot_delivery_failed: {e}"
+            return f"robot_delivery_failed: {e}", None
+
+def handle_question(text, lang, session_id):
+    sid = session_id or uuid.uuid4().hex
+    session = SESSIONS.setdefault(sid, {"history": [], "created": time.time()})
+    result = get_answer(text, lang)
+    session["history"].append({"q": text, "a": result["answer"]})
+    delivery, audio_url = deliver_to_robot(result["answer"], lang)
+    return {"session_id": sid, "lang": lang, "robot_delivery": delivery, "audio_url": audio_url, **result}
+
+@app.get("/", response_class=HTMLResponse)
+def talk_page():
+    with open(os.path.join(HERE, "talk.html"), encoding="utf-8") as f:
+        return f.read()
 
 @app.get("/api/health")
 def health():
@@ -41,15 +56,26 @@ def health():
 
 @app.post("/api/chat")
 def chat(body: ChatIn):
-    sid = body.session_id or uuid.uuid4().hex
-    session = SESSIONS.setdefault(sid, {"history": [], "created": time.time()})
-    lang = body.lang if body.lang in ("de", "en") else "en"
     t0 = time.time()
-    result = get_answer(body.message, lang)
-    session["history"].append({"q": body.message, "a": result["answer"]})
-    delivery = deliver_to_robot(result["answer"], lang)
-    return {"session_id": sid, "lang": lang, "robot_delivery": delivery,
-            "latency_ms": int((time.time() - t0) * 1000), **result}
+    lang = body.lang if body.lang in ("de", "en") else "en"
+    res = handle_question(body.message, lang, body.session_id)
+    res["latency_ms"] = int((time.time() - t0) * 1000)
+    return res
+
+@app.post("/api/chat/audio")
+def chat_audio(audio: UploadFile = File(...), session_id: str | None = Form(None),
+               lang: str | None = Form(None)):
+    t0 = time.time()
+    data = audio.file.read()
+    text, detected = stt.transcribe(data, lang if lang in ("de", "en") else None)
+    del data                                   # raw audio is never stored
+    stt_ms = int((time.time() - t0) * 1000)
+    if not text:
+        return {"session_id": session_id, "transcript": "", "answer": None,
+                "route": "no_speech", "latency_ms": stt_ms}
+    res = handle_question(text, detected, session_id)
+    res.update(transcript=text, stt_ms=stt_ms, latency_ms=int((time.time() - t0) * 1000))
+    return res
 
 @app.post("/api/reset")
 def reset(body: ResetIn):
