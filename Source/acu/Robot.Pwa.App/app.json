@@ -10,6 +10,7 @@
       "package": "com.acu.robotpwa",
       "permissions": [
         "INTERNET",
+        "RECORD_AUDIO",
         "ACCESS_NETWORK_STATE",
         "ACCESS_WIFI_STATE",
         "CHANGE_WIFI_MULTICAST_STATE",

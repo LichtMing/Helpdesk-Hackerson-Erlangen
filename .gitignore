@@ -58,6 +58,9 @@ pnpm-debug.log*
 **/android/local.properties
 *.jsbundle
 
+# Large on-device ML models are deployed separately, never committed.
+Source/acu/Robot.Pwa.App/android/app/src/main/assets/models/*.bin
+
 # Local environment files (commit example templates only)
 .env
 .env.*
@@ -86,3 +89,14 @@ acu-release*/
 *.exe
 *.test
 *.out
+
+# Python environments and caches
+.venv/
+**/__pycache__/
+*.py[cod]
+
+# Local AI models, generated indexes, and inference caches
+ollama_models/
+models_cache/
+ai_engine/index/
+*.gguf

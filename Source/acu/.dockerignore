@@ -1,0 +1,18 @@
+# The ACU compose file uses this directory as build context for the .NET
+# services. Keep the context limited to projects their Dockerfiles copy.
+**
+!ApiGateway/
+!ApiGateway/**
+!BE/
+!BE/AcuStorage/
+!BE/AcuStorage/**
+!BE/MdnsAdvertiser/
+!BE/MdnsAdvertiser/**
+!_Globals/
+!_Globals/PropertySheets/
+!_Globals/PropertySheets/**
+
+# Never send local build output even below an included project.
+**/[Bb]in/
+**/[Oo]bj/
+**/[Pp]ublish/
