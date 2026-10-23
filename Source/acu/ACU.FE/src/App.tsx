@@ -19,7 +19,7 @@ import DevicesView   from "./features/devices/DevicesView";
 import WorkflowsView from "./features/workflows/WorkflowsView";
 import RobotWorkflowsView from "./features/workflows/robot/RobotWorkflowsView";
 import SettingsView  from "./features/settings/SettingsView";
-
+import { DeviceList } from "./features/DeviceList";
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>("devices");
   const [creatingRobotWorkflow, setCreatingRobotWorkflow] = useState(false);
@@ -41,30 +41,35 @@ export default function App() {
 
   const navItems: NavItem[] = [
     {
-      id: "devices",
-      label: t("navDevices"),
-      icon: <MdDevices size={20} />,
-      badge: registeredDevices.length,
-      badgeTone: "neutral",
+id: "devices",
+label: t("navDevices"),
+icon: <MdDevices size={20} />,
+badge: registeredDevices.length,
+badgeTone: "neutral",
     },
     {
-      id: "requests",
-      label: t("navRequests"),
-      icon: <MdPendingActions size={20} />,
-      badge: pendingRequests.length,
-      badgeTone: "brand",
+id: "requests",
+label: t("navRequests"),
+icon: <MdPendingActions size={20} />,
+badge: pendingRequests.length,
+badgeTone: "brand",
     },
     {
-      id: "workflows",
-      label: t("navWorkflows"),
-      icon: <MdRoute size={20} />,
-      badge: workflows.length + robotWorkflows.workflows.length,
-      badgeTone: "neutral",
+id: "workflows",
+label: t("navWorkflows"),
+icon: <MdRoute size={20} />,
+badge: workflows.length + robotWorkflows.workflows.length,
+badgeTone: "neutral",
     },
     {
-      id: "settings",
-      label: t("navSettings"),
-      icon: <MdSettings size={20} />,
+id: "settings",
+label: t("navSettings"),
+icon: <MdSettings size={20} />,
+    },
+    {
+id: "patient",
+label: "Patient",
+icon: <span>👤</span>,
     },
   ];
 
@@ -125,6 +130,8 @@ export default function App() {
         )}
         {isServerOnline && activeTab === "settings" && <SettingsView />}
       </main>
+      {isServerOnline && activeTab === "patient" && <DeviceList />}
+
 
       {isServerOnline && <BottomNav items={navItems} active={activeTab} onChange={changeTab} />}
 
