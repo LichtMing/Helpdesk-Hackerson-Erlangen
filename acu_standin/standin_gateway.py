@@ -313,14 +313,27 @@ def ask_model(history: list[dict], question: str) -> str:
     response = requests.post(
         f"{OLLAMA_URL}/api/chat",
         json={"model": OLLAMA_MODEL, "messages": messages, "stream": False,
-              "keep_alive": "30m", "options": {"num_ctx": 4096, "temperature": 0.1}},
+              "keep_alive": "30m", "options": {"num_ctx": 4096, "temperature": 0.1, "num_predict": 110, "repeat_penalty": 1.2}},
         timeout=60,
     )
     response.raise_for_status()
     answer = response.json().get("message", {}).get("content", "").strip()
     if not answer:
         raise ValueError("empty model answer")
-    return answer
+    return tidy_answer(answer)
+
+
+def tidy_answer(text: str, max_sentences: int = 3) -> str:
+    """Spoken answers must be short: drop list markers and repeats, keep a few sentences."""
+    lines, seen = [], set()
+    for line in text.splitlines():
+        line = re.sub(r"^\s*([-*•]|\d+[.)])\s*", "", line).strip()
+        if line and line.lower() not in seen:
+            seen.add(line.lower())
+            lines.append(line if line.endswith((".", "!", "?", ":")) else line + ".")
+    sentences = re.split(r"(?<=[.!?])\s+", " ".join(lines))
+    short = " ".join(sentences[:max_sentences]).replace(":.", ".").strip()
+    return short.rstrip(":") or text
 
 
 def first_sentences(text: str, n: int = 3) -> str:
@@ -502,6 +515,8 @@ async def chat(request: Request):
     import anyio
     answer, route = await anyio.to_thread.run_sync(answer_question, body["deviceId"], session_id, text, language)
     print(f"Answered ({route}, {language}) in {int((time.time() - t0) * 1000)} ms", flush=True)
+    if os.getenv("LOG_TEXT") == "1":
+        print(f"   Q: {text}\n   A: {answer}", flush=True)
     return {"sessionId": session_id, "requestId": request_id, "answer": answer,
             "language": language, "isMock": False, "generatedAt": now_iso(), "route": route}
 
@@ -535,4 +550,4 @@ async def reset(request: Request):
 
 if __name__ == "__main__":
     print(f"Guide passages loaded: {len(GUIDE)} | model: {OLLAMA_MODEL} | auto-approve: {AUTO_APPROVE}")
-    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="warning")
+    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level=os.getenv("LOG_LEVEL", "warning"))
