@@ -40,7 +40,7 @@ export async function playWaveResponse(audio: ArrayBuffer, requestId: string): P
         if (status.didJustFinish) finish();
       }) ?? null;
       timeout = setTimeout(
-        () => finish(new Error("回答音频播放超时。")),
+        () => finish(new Error("Answer audio playback timed out.")),
         120_000,
       );
 

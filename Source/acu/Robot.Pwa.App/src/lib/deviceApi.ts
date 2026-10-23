@@ -44,7 +44,7 @@ async function request(
     return await fetchImpl(url, { ...init, signal: controller.signal });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("连接 ACU 超时，请检查地址和网络。");
+      throw new Error("The ACU connection timed out. Check the ACU address and network connection.");
     }
     throw error;
   } finally {
@@ -64,7 +64,7 @@ export async function checkAcuHealth(
   );
   if (!response.ok) throw await readError(response);
   const body = await response.json() as { status?: unknown };
-  if (body.status !== "ok") throw new Error("ACU 健康检查返回了无效结果。");
+  if (body.status !== "ok") throw new Error("The ACU health check returned an invalid result.");
 }
 
 export async function registerRobot(
@@ -103,7 +103,7 @@ export async function getRegistrationStatus(
   if (!response.ok) throw await readError(response);
   const body = await response.json() as { status?: unknown };
   if (!["pending", "approved", "rejected", "unregistered"].includes(String(body.status))) {
-    throw new Error("ACU 返回了未知的设备状态。");
+    throw new Error("ACU returned an unknown device status.");
   }
   return body.status as RegistrationStatus;
 }

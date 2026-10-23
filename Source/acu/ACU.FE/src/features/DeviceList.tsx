@@ -39,6 +39,37 @@ const generateBubbles = (count: number): Bubble[] => {
   }));
 };
 
+const GiraffeMascot = () => (
+  <svg
+    width="82"
+    height="96"
+    viewBox="0 0 100 120"
+    style={{ animation: 'softFloat 2.6s ease-in-out infinite', display: 'block' }}
+    role="img"
+    aria-label="Friendly giraffe assistant"
+  >
+    <rect x="40" y="44" width="20" height="56" rx="10" fill="#f2c350" />
+    <ellipse cx="50" cy="104" rx="26" ry="14" fill="#f2c350" />
+    <ellipse cx="50" cy="30" rx="22" ry="18" fill="#f2c350" />
+    <ellipse cx="28" cy="22" rx="6" ry="10" fill="#f2c350" />
+    <ellipse cx="72" cy="22" rx="6" ry="10" fill="#f2c350" />
+    <rect x="44" y="6" width="4" height="10" rx="2" fill="#b06a2a" />
+    <rect x="52" y="6" width="4" height="10" rx="2" fill="#b06a2a" />
+    <circle cx="40" cy="30" r="3" fill="#222" />
+    <circle cx="60" cy="30" r="3" fill="#222" />
+    <ellipse cx="50" cy="38" rx="6" ry="4" fill="#e8a83c" />
+    <path d="M 42 44 Q 50 50 58 44" fill="none" stroke="#222" strokeWidth="2" strokeLinecap="round" />
+    <circle cx="34" cy="54" r="4" fill="#b06a2a" />
+    <circle cx="58" cy="62" r="5" fill="#b06a2a" />
+    <circle cx="46" cy="78" r="4" fill="#b06a2a" />
+    <circle cx="62" cy="84" r="3" fill="#b06a2a" />
+    <circle cx="32" cy="96" r="3" fill="#b06a2a" />
+    <circle cx="56" cy="108" r="4" fill="#b06a2a" />
+    <circle cx="44" cy="24" r="3" fill="#b06a2a" />
+    <circle cx="62" cy="20" r="2" fill="#b06a2a" />
+  </svg>
+);
+
 export const DeviceList = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -95,6 +126,11 @@ export const DeviceList = () => {
       },
     ]);
     setIsEmergency(true);
+    setIsListening(false);
+  };
+
+  const handleReturnToConversation = () => {
+    setIsEmergency(false);
     setIsListening(false);
   };
 
@@ -638,32 +674,7 @@ export const DeviceList = () => {
               transition: 'background 0.4s ease',
             }}
           >
-            <svg
-              width="82"
-              height="96"
-              viewBox="0 0 100 120"
-              style={{ animation: 'softFloat 2.6s ease-in-out infinite', display: 'block' }}
-            >
-              <rect x="40" y="44" width="20" height="56" rx="10" fill="#f2c350" />
-              <ellipse cx="50" cy="104" rx="26" ry="14" fill="#f2c350" />
-              <ellipse cx="50" cy="30" rx="22" ry="18" fill="#f2c350" />
-              <ellipse cx="28" cy="22" rx="6" ry="10" fill="#f2c350" />
-              <ellipse cx="72" cy="22" rx="6" ry="10" fill="#f2c350" />
-              <rect x="44" y="6" width="4" height="10" rx="2" fill="#b06a2a" />
-              <rect x="52" y="6" width="4" height="10" rx="2" fill="#b06a2a" />
-              <circle cx="40" cy="30" r="3" fill="#222" />
-              <circle cx="60" cy="30" r="3" fill="#222" />
-              <ellipse cx="50" cy="38" rx="6" ry="4" fill="#e8a83c" />
-              <path d="M 42 44 Q 50 50 58 44" fill="none" stroke="#222" strokeWidth="2" strokeLinecap="round" />
-              <circle cx="34" cy="54" r="4" fill="#b06a2a" />
-              <circle cx="58" cy="62" r="5" fill="#b06a2a" />
-              <circle cx="46" cy="78" r="4" fill="#b06a2a" />
-              <circle cx="62" cy="84" r="3" fill="#b06a2a" />
-              <circle cx="32" cy="96" r="3" fill="#b06a2a" />
-              <circle cx="56" cy="108" r="4" fill="#b06a2a" />
-              <circle cx="44" cy="24" r="3" fill="#b06a2a" />
-              <circle cx="62" cy="20" r="2" fill="#b06a2a" />
-            </svg>
+            <GiraffeMascot />
           </div>
         </div>
       </div>
@@ -677,6 +688,33 @@ export const DeviceList = () => {
           zIndex: 1,
         }}
       >
+        {isEmergency && (
+          <button
+            type="button"
+            onClick={handleReturnToConversation}
+            aria-label="Back to conversation"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '12px',
+              marginBottom: '24px',
+              padding: '16px 24px',
+              border: '2px solid #ffffff',
+              borderRadius: '18px',
+              background: '#ffffff',
+              color: '#8e2020',
+              fontSize: '20px',
+              fontWeight: 800,
+              cursor: 'pointer',
+              boxShadow: '0 12px 28px rgba(0,0,0,0.2)',
+              touchAction: 'manipulation',
+            }}
+          >
+            <span aria-hidden="true" style={{ fontSize: '28px', lineHeight: 1 }}>←</span>
+            Back to conversation
+          </button>
+        )}
+
         <div
           style={{
             background: '#ffffff',
@@ -755,7 +793,7 @@ export const DeviceList = () => {
               target.style.boxShadow = '0 16px 34px rgba(198,40,40,0.28)';
             }}
           >
-            Emergency Call
+            I need help
           </button>
         </div>
 

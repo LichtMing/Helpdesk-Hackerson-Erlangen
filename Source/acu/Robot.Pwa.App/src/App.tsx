@@ -91,7 +91,7 @@ export default function App() {
         });
       } catch (error) {
         if (!mounted) return;
-        setMessage(`无法恢复机器人配置或连接 ACU：${errorMessage(error)}`);
+        setMessage(`Unable to restore the robot configuration or connect to ACU: ${errorMessage(error)}`);
         setStage("setup");
       }
     };
@@ -122,7 +122,7 @@ export default function App() {
           },
         });
       } catch (error) {
-        if (mounted) setMessage(`仍在等待审批；最近一次检查失败：${errorMessage(error)}`);
+        if (mounted) setMessage(`Still waiting for approval. The latest status check failed: ${errorMessage(error)}`);
       }
     };
 
@@ -182,7 +182,7 @@ export default function App() {
       setConfig(DEFAULT_ROBOT_CONFIG);
       setMessage("Saved settings cleared. The ACU device record was not deleted.");
     } catch (error) {
-      setMessage(`无法清除本地配置：${errorMessage(error)}`);
+      setMessage(`Unable to clear the local configuration: ${errorMessage(error)}`);
     }
     setStage("setup");
   };
@@ -193,7 +193,7 @@ export default function App() {
     try {
       await saveRobotConfig(updated);
     } catch (error) {
-      setMessage(`语言已切换，但保存失败：${errorMessage(error)}`);
+      setMessage(`The language was changed, but the setting could not be saved: ${errorMessage(error)}`);
     }
   };
 

@@ -78,7 +78,7 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
       .catch((error: unknown) => {
         const detail = error instanceof Error ? error.message : String(error);
         throw new Error(
-          `无法加载离线语音模型。请按 android/app/src/main/assets/models/README.md 部署 ${WHISPER_MODEL_ASSET} 和 ${VAD_MODEL_ASSET}。${detail}`,
+          `Unable to load the offline speech models. Follow android/app/src/main/assets/models/README.md to deploy ${WHISPER_MODEL_ASSET} and ${VAD_MODEL_ASSET}. ${detail}`,
         );
       })
       .finally(() => {
@@ -106,12 +106,12 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
         },
       );
       if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
-        throw new Error("麦克风权限未授予，免按键对话无法启动。");
+        throw new Error("Microphone permission was not granted. Hands-free conversation cannot start.");
       }
 
       await this.initialize();
       if (!this.startRequested) return;
-      if (!this.vad) throw new Error("语音活动检测尚未初始化。");
+      if (!this.vad) throw new Error("Voice activity detection has not been initialized.");
 
       this.running = true;
       this.resetUtterance();
@@ -157,7 +157,7 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
 
   private appendAudio(data: Uint8Array): void {
     if (this.byteCount + data.byteLength > MAX_RECORDING_BYTES) {
-      this.streamError = "单句话最长 30 秒，请停顿后重新提问。";
+      this.streamError = "A single utterance can be up to 30 seconds. Pause, then ask the question again.";
       return;
     }
     const copy = new Uint8Array(data.byteLength);
@@ -171,7 +171,7 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
     try {
       await this.audioStream.stop();
       if (this.streamError) throw new Error(this.streamError);
-      if (!this.whisperContext) throw new Error("Whisper 模型尚未初始化。");
+      if (!this.whisperContext) throw new Error("The Whisper model has not been initialized.");
       if (this.byteCount < MIN_RECORDING_BYTES) return;
 
       this.options?.onStateChange("transcribing");
@@ -192,7 +192,7 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
       const result = await transcription.promise;
       this.activeTranscriptionStop = null;
       const text = result.result.trim();
-      if (!text) throw new Error("检测到说话，但没有识别出文字。");
+      if (!text) throw new Error("Speech was detected, but no text could be recognized.");
       const configuredLanguage = this.options?.getLanguage() ?? "auto";
       const detectedLanguage =
         configuredLanguage === "auto" && isSpeechLanguage(result.language)

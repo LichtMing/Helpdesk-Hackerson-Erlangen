@@ -25,14 +25,14 @@ type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 function required(value: string, field: string): string {
   const trimmed = value.trim();
-  if (!trimmed) throw new Error(`${field} 不能为空。`);
+  if (!trimmed) throw new Error(`${field} is required.`);
   return trimmed;
 }
 
 function endpoint(identity: ConversationIdentity, path: string): string {
   const baseUrl = required(identity.baseUrl, "ACU URL").replace(/\/+$/, "");
   if (!/^https?:\/\//i.test(baseUrl)) {
-    throw new Error("ACU URL 必须以 http:// 或 https:// 开头。");
+    throw new Error("ACU URL must start with http:// or https://.");
   }
   return `${baseUrl}${path}`;
 }
@@ -76,7 +76,7 @@ export async function sendChat(
 ): Promise<ChatReply> {
   const requestId = input.requestId ?? createRequestId();
   const sessionId = required(input.sessionId, "sessionId");
-  const text = required(input.text, "转写文本");
+  const text = required(input.text, "Transcript text");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 60_000);
 
@@ -107,7 +107,7 @@ export async function sendChat(
       typeof payload.robotDelivery !== "string" ||
       typeof payload.generatedAt !== "string"
     ) {
-      throw new Error("ACU 返回了无效的对话响应。");
+      throw new Error("ACU returned an invalid chat response.");
     }
     return payload as ChatReply;
   } finally {
@@ -130,17 +130,17 @@ export async function synthesizeSpeech(
       body: JSON.stringify({
         deviceId: required(identity.deviceId, "deviceId"),
         mac: required(identity.mac, "MAC"),
-        text: required(text, "回答文本"),
+        text: required(text, "Answer text"),
         language: required(language, "language"),
       }),
       signal: controller.signal,
     });
     if (!response.ok) throw await apiError(response);
     if (!(response.headers.get("content-type") ?? "").toLowerCase().includes("audio/wav")) {
-      throw new Error("ACU TTS 返回了错误的音频格式。");
+      throw new Error("ACU TTS returned an unsupported audio format.");
     }
     const audio = await response.arrayBuffer();
-    if (audio.byteLength < 44) throw new Error("ACU TTS 返回了空音频。");
+    if (audio.byteLength < 44) throw new Error("ACU TTS returned empty audio.");
     return audio;
   } finally {
     clearTimeout(timer);

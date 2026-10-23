@@ -24,17 +24,17 @@ const LANGUAGES: ReadonlySet<string> = new Set(["auto", "en", "de", "zh"]);
 
 function required(value: string, field: string): string {
   const trimmed = value.trim();
-  if (!trimmed) throw new Error(`${field} 不能为空。`);
+  if (!trimmed) throw new Error(`${field} is required.`);
   return trimmed;
 }
 
 export function normalizeRobotConfig(value: RobotConfig): RobotConfig {
   const baseUrl = required(value.baseUrl, "ACU URL").replace(/\/+$/, "");
   if (!/^https?:\/\//i.test(baseUrl)) {
-    throw new Error("ACU URL 必须以 http:// 或 https:// 开头。");
+    throw new Error("ACU URL must start with http:// or https://.");
   }
   if (!LANGUAGES.has(value.language)) {
-    throw new Error("不支持所选语音语言。");
+    throw new Error("The selected speech language is not supported.");
   }
 
   return {

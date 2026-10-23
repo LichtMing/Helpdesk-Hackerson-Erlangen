@@ -20,13 +20,13 @@ type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 function required(value: string, field: string): string {
   const trimmed = value.trim();
-  if (!trimmed) throw new Error(`${field} 不能为空。`);
+  if (!trimmed) throw new Error(`${field} is required.`);
   return trimmed;
 }
 
 function asReceipt(value: unknown): TranscriptReceipt {
   if (!value || typeof value !== "object") {
-    throw new Error("ACU 返回了无效的 JSON 数据。");
+    throw new Error("ACU returned invalid JSON data.");
   }
 
   const receipt = value as Partial<TranscriptReceipt>;
@@ -39,7 +39,7 @@ function asReceipt(value: unknown): TranscriptReceipt {
     "receivedAt",
   ];
   if (fields.some((field) => typeof receipt[field] !== "string")) {
-    throw new Error("ACU 回执缺少必要字段。");
+    throw new Error("The ACU receipt is missing required fields.");
   }
   return receipt as TranscriptReceipt;
 }
@@ -50,12 +50,12 @@ export async function sendTranscript(
 ): Promise<TranscriptReceipt> {
   const baseUrl = required(input.baseUrl, "ACU URL").replace(/\/+$/, "");
   if (!/^https?:\/\//i.test(baseUrl)) {
-    throw new Error("ACU URL 必须以 http:// 或 https:// 开头。");
+    throw new Error("ACU URL must start with http:// or https://.");
   }
 
   const deviceId = required(input.deviceId, "deviceId");
   const mac = required(input.mac, "MAC");
-  const text = required(input.text, "转写文本");
+  const text = required(input.text, "Transcript text");
   const requestId = input.requestId ??
     `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -79,7 +79,7 @@ export async function sendTranscript(
       try {
         payload = JSON.parse(raw);
       } catch {
-        throw new Error(`ACU 返回了非 JSON 响应（HTTP ${response.status}）。`);
+        throw new Error(`ACU returned a non-JSON response (HTTP ${response.status}).`);
       }
     }
 
@@ -87,12 +87,12 @@ export async function sendTranscript(
       const apiError = payload && typeof payload === "object" && "error" in payload
         ? String((payload as { error: unknown }).error)
         : `HTTP ${response.status}`;
-      throw new Error(`发送转写文本失败：${apiError}`);
+      throw new Error(`Failed to send transcript text: ${apiError}`);
     }
 
     const receipt = asReceipt(payload);
     if (receipt.requestId !== requestId || receipt.text !== text) {
-      throw new Error("ACU 回执与发送的文本不一致。");
+      throw new Error("The ACU receipt does not match the submitted transcript.");
     }
     return receipt;
   } finally {
