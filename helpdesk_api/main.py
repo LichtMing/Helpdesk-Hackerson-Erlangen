@@ -1,9 +1,9 @@
 import time, uuid
 from fastapi import FastAPI
 from pydantic import BaseModel
+import gateway_client
 
 app = FastAPI(title="ACU Helpdesk API")
-
 SESSIONS: dict[str, dict] = {}   # kept in memory only, never written to disk
 
 class ChatIn(BaseModel):
@@ -14,7 +14,7 @@ class ChatIn(BaseModel):
 class ResetIn(BaseModel):
     session_id: str
 
-def get_answer(text: str, lang: str) -> dict:
+def get_answer(text, lang):
     # Placeholder until the AI engine is plugged in
     if lang == "de":
         return {"answer": "Das ist eine Testantwort.", "route": "placeholder"}
@@ -22,7 +22,8 @@ def get_answer(text: str, lang: str) -> dict:
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "active_sessions": len(SESSIONS)}
+    return {"status": "ok", "active_sessions": len(SESSIONS),
+            "gateway": gateway_client.GATEWAY_URL, "robot": gateway_client.DEVICE_ID}
 
 @app.post("/api/chat")
 def chat(body: ChatIn):
@@ -31,7 +32,12 @@ def chat(body: ChatIn):
     lang = body.lang or "en"
     result = get_answer(body.message, lang)
     session["history"].append({"q": body.message, "a": result["answer"]})
-    return {"session_id": sid, "lang": lang, **result}
+    try:
+        gateway_client.publish_answer(result["answer"])
+        delivery = "sent_to_robot"
+    except Exception as e:
+        delivery = f"robot_delivery_failed: {e}"
+    return {"session_id": sid, "lang": lang, "robot_delivery": delivery, **result}
 
 @app.post("/api/reset")
 def reset(body: ResetIn):
