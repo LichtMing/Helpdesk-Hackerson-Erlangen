@@ -34,7 +34,43 @@ services:
       - backend
     restart: unless-stopped
 
+  # Internal AI boundary. It is intentionally not published to the host: the
+  # robot must use the .NET gateway on port 3000. The current implementation
+  # is still a placeholder and is not wired into IChatModelClient yet.
+  helpdesk-api:
+    profiles: ["ai"]
+    build:
+      context: ../..
+      dockerfile: helpdesk_api/Dockerfile
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=qwen2.5:1.5b-instruct
+    expose:
+      - "8000"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Optional local-development model runtime. Models live in a named volume
+  # and are never committed to Git. Do not enable this profile on the 4 GB
+  # target ACU until the final storage budget has been validated.
+  ollama:
+    profiles: ["ai"]
+    image: ollama/ollama:0.40.8
+    expose:
+      - "11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
   mdns:
+    profiles: ["lan"]
     build:
       context: .                      # root — MdnsAdvertiser.csproj lives under BE/
       dockerfile: BE/MdnsAdvertiser/Dockerfile
@@ -47,3 +83,4 @@ services:
 
 volumes:
   acu-data:
+  ollama-data:

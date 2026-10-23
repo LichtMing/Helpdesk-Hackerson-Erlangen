@@ -1,7 +1,7 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
-COPY package.json .
-RUN npm install
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
 # Build with empty API base so nginx proxy handles /api routing
 RUN VITE_API_BASE_URL="" npm run build

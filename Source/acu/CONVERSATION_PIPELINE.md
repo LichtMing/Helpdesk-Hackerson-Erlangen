@@ -18,6 +18,42 @@ The existing event API reference is `Doc/api-guide.pdf`. That guide was checked 
 
 The ApiGateway continues to listen on port `3000`. The screenshot's suggested port `8000` is not used by this repository.
 
+## Container boundaries
+
+The repository uses Docker Compose for ACU-side services, not for the Android robot runtime:
+
+```text
+Robot Android app
+  -> ApiGateway:3000 (public robot/API contract)
+       -> helpdesk-api:8000 (internal AI boundary; placeholder today)
+            -> Ollama:11434 (internal model runtime)
+       -> offline TTS
+ACU operator browser -> frontend:3100
+```
+
+- `backend` and `frontend` are the default development services.
+- `helpdesk-api` and `ollama` are opt-in through the `ai` Compose profile. Neither internal port is published to the host.
+- `mdns` is opt-in through the `lan` profile because host multicast behavior differs on Docker Desktop.
+- `Robot.Pwa.App` remains an Android application because it needs microphone, native Whisper/VAD, and audio playback access.
+- `ai_engine/` currently contains retrieval experiments and evaluation material; it is not a runtime service.
+
+Validate the default stack without downloading the model runtime:
+
+```text
+docker compose config
+docker compose build backend
+docker compose up backend
+```
+
+For AI-team development only:
+
+```text
+docker compose --profile ai up --build -d ollama helpdesk-api
+docker compose --profile ai exec ollama ollama pull qwen2.5:1.5b-instruct
+```
+
+The Ollama image and `qwen2.5:1.5b-instruct` model are too large to assume they fit the challenge's stated 4 GB storage limit alongside the remaining stack. The `ai` profile is therefore a workstation integration environment until the target storage image is measured.
+
 ## Compatibility with the event API guide
 
 - The new routes use the guide's `/api` prefix, camelCase JSON, standard status codes, and existing approved-device checks.
