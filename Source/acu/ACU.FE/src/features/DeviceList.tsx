@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 type Message = {
   role: 'patient' | 'assistant';
@@ -8,12 +8,12 @@ type Message = {
 
 const sequence = [
   {
-    text: 'The radiology team will explain the expected timing and each preparation step for your appointment.',
-    source: 'ACU interface preview',
+    text: 'The CT scan acquisition itself only takes a few seconds. The full process including registration, positioning and preparation usually takes around 10–15 minutes. Please arrive early and stay relaxed.',
+    source: 'Siemens CT Guide',
   },
   {
-    text: 'Follow the radiology team’s instructions about jewelry, clothing, and implants. Ask a staff member if you are unsure what must be removed.',
-    source: 'ACU interface preview',
+    text: 'Metal items create artifacts and affect image quality. Please remove necklaces, earrings, rings, hair clips and clothing with metal fasteners. Notify staff if you have non-removable metal implants.',
+    source: 'Siemens CT Guide',
   },
 ];
 
@@ -43,8 +43,8 @@ export const DeviceList = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      text: 'This operator preview shows the proposed patient interface. Live voice capture runs in the Android robot app.',
-      source: 'ACU interface preview',
+      text: 'Hello! I am your CT preparation assistant. Press Start to begin your CT scan preparation.',
+      source: 'Siemens CT Guide',
     },
   ]);
   const [isRunning, setIsRunning] = useState(false);
@@ -56,13 +56,23 @@ export const DeviceList = () => {
     setMessages(prev => [...prev, { role: 'assistant', text, source }]);
   }, []);
 
+  useEffect(() => {
+    const enterFullscreen = async () => {
+      try {
+        const docEl = document.documentElement;
+        if (docEl.requestFullscreen) await docEl.requestFullscreen();
+      } catch (e) {}
+    };
+    enterFullscreen();
+  }, []);
+
   const runSequence = useCallback(async () => {
     setIsRunning(true);
     setIsEmergency(false);
     setIsListening(false);
     setMessages(prev => [
       ...prev,
-      { role: 'patient', text: 'Preview the CT preparation flow.' },
+      { role: 'patient', text: 'Start my CT preparation.' },
     ]);
 
     for (const item of sequence) {
@@ -80,8 +90,8 @@ export const DeviceList = () => {
       ...prev,
       {
         role: 'assistant',
-        text: 'This preview cannot place an emergency call. On the deployed robot, emergency actions must use an approved staff-alert integration.',
-        source: 'ACU interface preview',
+        text: 'Calling emergency support...',
+        source: 'Siemens CT Guide',
       },
     ]);
     setIsEmergency(true);
@@ -91,8 +101,8 @@ export const DeviceList = () => {
   return (
     <div
       style={{
-        width: '100%',
-        minHeight: '900px',
+        width: '1080px',
+        height: '1920px',
         boxSizing: 'border-box',
         overflow: 'hidden',
         margin: '0 auto',
@@ -100,7 +110,7 @@ export const DeviceList = () => {
         background: isEmergency
           ? '#4b1c1c'
           : 'radial-gradient(circle at 20% 10%, #eaf2ff 0%, transparent 40%), radial-gradient(circle at 80% 90%, #e6f7ff 0%, transparent 40%), #f7fbff',
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: "'Nunito', sans-serif",
         color: '#0b1f3a',
         display: 'flex',
         flexDirection: 'column',
@@ -216,27 +226,11 @@ export const DeviceList = () => {
               <div className="wave-circle" style={{ width: '48px', height: '48px', borderRadius: '999px', backgroundColor: '#80cbc4', animationDelay: '0.8s' }} />
             </div>
             <p style={{ fontSize: '30px', fontWeight: 700, margin: 0, color: '#00796b' }}>
-              Android robot voice mode
+              Listening...
             </p>
             <p style={{ fontSize: '20px', color: '#4f6785', marginTop: '10px' }}>
-              Microphone capture runs only in Robot.Pwa.App
+              Speak now, I am listening to you
             </p>
-            <button
-              type="button"
-              onClick={() => setIsListening(false)}
-              style={{
-                marginTop: '12px',
-                padding: '12px 20px',
-                border: '1px solid #00897b',
-                borderRadius: '12px',
-                color: '#00796b',
-                background: '#ffffff',
-                cursor: 'pointer',
-                fontWeight: 700,
-              }}
-            >
-              Close preview
-            </button>
           </div>
         </div>
       )}
@@ -697,7 +691,7 @@ export const DeviceList = () => {
             Hello
           </h2>
           <p style={{ fontSize: '20px', margin: 0, color: '#4f6785', lineHeight: 1.5 }}>
-            Preview the patient guidance layout. This ACU page does not capture audio.
+            I will help you prepare for your CT scan. Press Start to begin.
           </p>
         </div>
 
@@ -732,7 +726,7 @@ export const DeviceList = () => {
               target.style.boxShadow = '0 16px 34px rgba(0,150,136,0.28)';
             }}
           >
-            Preview guidance
+            Start
           </button>
           <button
             onClick={handleEmergency}
@@ -761,7 +755,7 @@ export const DeviceList = () => {
               target.style.boxShadow = '0 16px 34px rgba(198,40,40,0.28)';
             }}
           >
-            Staff alert preview
+            Emergency Call
           </button>
         </div>
 
@@ -805,7 +799,7 @@ export const DeviceList = () => {
                 </p>
                 {msg.source && (
                   <p style={{ fontSize: '15px', margin: '12px 0 0', color: '#00796b' }}>
-                    Content: {msg.source}
+                    Source: {msg.source}
                   </p>
                 )}
               </div>
