@@ -1,114 +1,98 @@
 # Robot PWA App
 
-Robot PWA is the robot-facing Android companion app for Alfred Control Unit (ACU). It captures speech locally, sends only text to ACU, receives an answer, plays ACU-generated offline speech, and resumes listening automatically.
+Robot PWA is the Android robot client for Alfred Control Unit (ACU). It listens without a record button, transcribes speech locally, sends only text to ACU, plays the returned speech, and resumes listening.
 
-## Current STT integration
+Despite the historical name, this is an Expo/React Native Android application. Its native microphone and Whisper modules do not run in Expo Go.
 
-The `feat/robot-stt-to-acu` branch contains a focused Android verification flow:
+## Runtime flow
 
-1. After the one-time Android microphone permission, the app starts listening automatically.
-2. Local Silero VAD detects speech and ends an utterance after about 700 ms of silence.
-3. `whisper.rn` runs the multilingual whisper.cpp `base` model locally on the robot.
-4. The recognized text is posted automatically to `POST /api/chat` with a temporary `sessionId`.
-5. ACU validates the registered/approved robot and returns an answer. Until the Ollama adapter is ready, Development mode returns an explicitly marked `isMock: true` integration response.
-6. The app requests `POST /api/tts`, plays the returned WAV while microphone capture remains paused, deletes the temporary cache file, and resumes listening.
-7. On app shutdown it calls `POST /api/reset`; the ACU idle timeout is the fallback when shutdown interrupts the request.
+1. On first launch, enter the ACU URL and robot identity.
+2. The app checks ACU health, registers the robot, and polls until an ACU operator approves it.
+3. The validated configuration is stored on the device. Later launches recheck ACU availability, approval, and the matching MAC.
+4. After Android microphone permission is granted, 16 kHz mono PCM capture starts automatically.
+5. Local Silero VAD detects speech and ends the utterance after about 700 ms of silence.
+6. The multilingual whisper.cpp base model transcribes the utterance locally through `whisper.rn`.
+7. The app sends the text to `POST /api/chat`. Raw microphone audio never goes to ACU.
+8. The app requests `POST /api/tts`, pauses listening, plays the returned WAV, deletes the temporary audio, and resumes listening.
+9. Moving the app to the background pauses the microphone. Returning to the foreground resumes it.
+10. Leaving the conversation releases native resources and requests `POST /api/reset`.
 
-The older `POST /api/bot/transcripts/{deviceId}` endpoint remains available as a focused UTF-8 transport check. Neither endpoint writes patient conversation text to the JSON stores. Qwen/Ollama integration is intentionally not part of the current branch.
+Development mode can return an explicitly marked `isMock: true` response until the Ollama adapter is connected. It must not be treated as a patient answer.
 
-### Prepare the model
+## Prepare the project
 
-The model binaries are intentionally excluded from Git. Before building, download the official multilingual Whisper model and Silero VAD model to these exact paths:
+Requirements:
 
-```powershell
-$ModelDirectory = ".\android\app\src\main\assets\models"
-New-Item -ItemType Directory -Force $ModelDirectory
-Invoke-WebRequest `
-  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin" `
-  -OutFile "$ModelDirectory\ggml-base.bin"
-Invoke-WebRequest `
-  "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v6.2.0.bin" `
-  -OutFile "$ModelDirectory\ggml-silero-v6.2.0.bin"
-```
+- Node.js 22.20 or newer and npm
+- Android Studio, JDK, Android SDK, and platform tools
+- An Android emulator or target robot with a microphone
+- A reachable ACU ApiGateway
 
-Do not use `ggml-base.en.bin`; that variant is English-only. Both `.bin` files are ignored by Git, while the deployment instructions remain tracked.
+From this directory:
 
-### Run the focused checks
-
-```powershell
+~~~text
 npm ci
+npm run models:prepare
+npm run models:check
 npm run typecheck
+npm run test:config
+npm run test:device
 npm run test:transcript
 npm run test:conversation
-npm run android
-```
+~~~
 
-The Android app defaults to `http://10.0.2.2:3000`, which reaches the host machine from the standard Android emulator. On a physical robot, replace it with the ACU's LAN address. The entered device ID and MAC must already be registered and approved in ACU.
+`models:prepare` downloads pinned Whisper and Silero VAD assets and verifies their sizes and SHA-256 hashes. The binaries live in `android/app/src/main/assets/models/` and are intentionally ignored by Git.
 
-> Despite its historical name, this is an Expo/React Native Android app. Local speech recognition uses native modules, so it will not run inside Expo Go; use an Android development build or APK.
+The Android emulator reaches the host ACU through `http://10.0.2.2:3000`. A physical robot must use the ACU computer's reachable LAN address, for example `http://192.168.1.100:3000`.
 
-## Implemented structure
+Do not run `npm run prebuild` casually. Expo regenerates `android/`, so project-specific native changes must be reviewed afterward.
 
-```text
+## Implemented modules
+
+~~~text
 src/App.tsx
-  ├── hands-free conversation status, last transcript, and last ACU answer
-  ├── ACU URL, device ID, MAC, and language inputs
-  └── automatic chat, TTS playback, and session reset
+  first-run setup, registration/approval, app lifecycle,
+  hands-free status, transcript, answer, and session reset
+
+src/lib/configStorage.ts
+  validated on-device robot configuration
+
+src/lib/deviceApi.ts
+  ACU health, registration, approval polling, and MAC verification
 
 src/lib/speechToText.android.ts
-  ├── Android microphone permission
-  ├── 16 kHz, mono, 16-bit PCM capture
-  ├── Silero VAD automatic speech boundaries
-  └── local whisper.cpp inference through whisper.rn
-
-src/lib/transcriptApi.ts
-  └── retained POST /api/bot/transcripts/{deviceId} transport check
+  microphone permission, PCM capture, Silero VAD, and local Whisper
 
 src/lib/conversationApi.ts
-  └── POST /api/chat, POST /api/tts, and POST /api/reset contracts
+  POST /api/chat, POST /api/tts, and POST /api/reset
 
 src/lib/responsePlayer.android.ts
-  └── temporary WAV cache, playback, and immediate deletion
-```
+  temporary WAV playback and immediate cache deletion
 
-`speechToText.ts` is a non-Android stub so the UI can still be bundled for the web, but recording and Whisper inference are Android-only.
+src/lib/transcriptApi.ts
+  retained UTF-8 transport test for the older transcript endpoint
+~~~
 
-## Requirements
+`speechToText.ts` and `responsePlayer.ts` are non-Android stubs. The web command previews layout only; it does not test native recording or inference.
 
-- Node.js 22.20 or newer and npm.
-- Android Studio with a JDK and Android SDK/platform tools.
-- An Android emulator or connected robot with microphone access.
-- A running ACU ApiGateway reachable over the network.
-- A robot record already registered and approved in ACU; the test endpoint uses the existing device ID and MAC validation.
+## Later development APK build
 
-## Install and run
+The project is prepared for, but this work does not run, the APK build:
 
-From the repository root in PowerShell:
+~~~text
+npm run build:apk
+~~~
 
-```powershell
-Set-Location .\Source\acu\Robot.Pwa.App
-npm ci
-# Download the model as described above.
-npm run typecheck
-npm run test:transcript
-npm run android
-```
+That command first verifies both model assets, runs Gradle `assembleDebug`, and copies the result to `dist/acu-robot-development.apk`. The APK is debug-signed for development only. Production distribution requires an organization-controlled signing key and release configuration.
 
-The checked-in Android project contains native-module autolinking and microphone permission. Do not run `npm run prebuild` casually: Expo regenerates `android/`, so review and restore project-specific manifest or Gradle settings afterward.
+## Testing and diagnostics
 
-On the app screen:
+- `npm run typecheck`: strict TypeScript validation.
+- `npm run test:config`: robot configuration normalization and corrupted-data handling.
+- `npm run test:device`: ACU health, registration, approval, MAC verification, and error propagation.
+- `npm run test:transcript`: Unicode transcript transport and rejected-device handling.
+- `npm run test:conversation`: chat correlation, WAV validation, reset, and unavailable-model errors.
+- `npm run models:check`: missing/corrupted embedded model detection.
+- `adb logcat`: native Android, microphone, Whisper, and playback diagnostics.
 
-1. Enter the reachable ACU URL plus an approved device ID and matching MAC.
-2. Select `auto`, `en`, `de`, or `zh`.
-3. Speak normally; no recording button is required.
-4. A short silence ends the sentence, triggers local transcription, and sends the text automatically.
-5. After ACU returns the same `requestId` and exact text, the robot listens for the next sentence.
-
-## Checks
-
-- `npm run typecheck` performs strict TypeScript checking.
-- `npm run test:transcript` starts a temporary HTTP server and verifies the JSON route, Unicode text, exact echo, and rejected-device error path.
-- `npm run test:conversation` verifies Unicode chat transport, request/session correlation, WAV validation, reset, and model-unavailable errors.
-- `npm run web` previews the screen layout only; browser recording is intentionally unsupported.
-
-For Android diagnostics, use `adb logcat`. The release build currently uses the debug keystore and must be given a production signing configuration before distribution.
+On a real device, verify microphone permission, supported CPU ABI, available RAM/storage, LAN access to ACU, and sustained inference temperature before treating the APK as robot-compatible.
