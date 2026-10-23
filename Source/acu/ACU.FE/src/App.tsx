@@ -19,6 +19,7 @@ import DevicesView   from "./features/devices/DevicesView";
 import WorkflowsView from "./features/workflows/WorkflowsView";
 import RobotWorkflowsView from "./features/workflows/robot/RobotWorkflowsView";
 import SettingsView  from "./features/settings/SettingsView";
+import { DeviceList } from "./features/DeviceList";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>("devices");
@@ -65,6 +66,11 @@ export default function App() {
       id: "settings",
       label: t("navSettings"),
       icon: <MdSettings size={20} />,
+    },
+    {
+      id: "patient",
+      label: "Patient preview",
+      icon: <span aria-hidden="true">👤</span>,
     },
   ];
 
@@ -124,6 +130,7 @@ export default function App() {
           </>
         )}
         {isServerOnline && activeTab === "settings" && <SettingsView />}
+        {isServerOnline && activeTab === "patient" && <DeviceList />}
       </main>
 
       {isServerOnline && <BottomNav items={navItems} active={activeTab} onChange={changeTab} />}

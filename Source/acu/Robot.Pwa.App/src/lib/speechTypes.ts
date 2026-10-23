@@ -11,7 +11,7 @@ export type SpeechState =
 export interface HandsFreeSpeechOptions {
   getLanguage: () => SpeechLanguage;
   onStateChange: (state: SpeechState) => void;
-  onTranscript: (text: string) => Promise<void>;
+  onTranscript: (text: string, language: SpeechLanguage) => Promise<void>;
   onError: (error: Error) => void;
 }
 

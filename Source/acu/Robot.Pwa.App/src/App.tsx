@@ -324,7 +324,7 @@ function ConversationScreen(props: {
       onStateChange: (state: SpeechState) => {
         if (mounted) setPhase(state);
       },
-      onTranscript: async (text: string) => {
+      onTranscript: async (text: string, detectedLanguage: SpeechLanguage) => {
         if (!mounted) return;
         setTranscript(text);
         setMessage("Speech recognized; waiting for the ACU answer…");
@@ -335,7 +335,7 @@ function ConversationScreen(props: {
           mac: current.mac,
           sessionId: sessionId.current,
           text,
-          language: current.language,
+          language: detectedLanguage,
         });
         if (!mounted) return;
         setAnswer(reply.answer);

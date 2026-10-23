@@ -1,6 +1,6 @@
 # ACU conversation pipeline
 
-This branch implements the parts of the patient conversation pipeline that do not depend on Qwen or Ollama.
+This repository implements the complete text conversation boundary from the Android robot to the local Qwen model.
 
 The existing event API reference is `Doc/api-guide.pdf`. That guide was checked against the gateway on 2026-10-22, before the conversation endpoints in this branch were added. After deployment, the running `/docs` Swagger UI remains the final contract.
 
@@ -10,13 +10,13 @@ The existing event API reference is `Doc/api-guide.pdf`. That guide was checked 
 2. The robot sends only recognized text to `POST /api/chat`.
 3. ApiGateway validates that the device ID and MAC belong to an approved robot.
 4. `ConversationService` holds a bounded conversation history in process memory.
-5. `IChatModelClient` generates an answer. The current development adapter returns a safe response marked `isMock: true`; it is not a patient answer.
+5. `HelpdeskChatModelClient` sends the bounded text history to the internal `helpdesk-api`, which calls the local `ct-robot` Ollama model. Raw audio, robot credentials, and persistent patient data are not sent to that service.
 6. The robot sends the answer text to `POST /api/tts`.
 7. The ACU runs offline eSpeak NG and streams a WAV response without creating an audio file.
 8. The robot stores the WAV only in its cache, pauses listening while it plays, deletes it, and resumes listening.
 9. `POST /api/reset`, the five-minute idle timeout, or gateway shutdown clears the application-level session memory.
 
-The ApiGateway continues to listen on port `3000`. The screenshot's suggested port `8000` is not used by this repository.
+The ApiGateway continues to listen on port `3000`. Port `8000` is internal to the Compose network and must not be used by robots.
 
 ## Container boundaries
 
@@ -25,14 +25,14 @@ The repository uses Docker Compose for ACU-side services, not for the Android ro
 ```text
 Robot Android app
   -> ApiGateway:3000 (public robot/API contract)
-       -> helpdesk-api:8000 (internal AI boundary; placeholder today)
+       -> helpdesk-api:8000 (internal text-only model adapter)
             -> Ollama:11434 (internal model runtime)
        -> offline TTS
 ACU operator browser -> frontend:3100
 ```
 
 - `backend` and `frontend` are the default development services.
-- `helpdesk-api` and `ollama` are opt-in through the `ai` Compose profile. Neither internal port is published to the host.
+- `helpdesk-api`, `ollama`, and the one-shot `ollama-model-init` service are opt-in through the `ai` Compose profile. Neither internal port is published to the host.
 - `mdns` is opt-in through the `lan` profile because host multicast behavior differs on Docker Desktop.
 - `Robot.Pwa.App` remains an Android application because it needs microphone, native Whisper/VAD, and audio playback access.
 - `ai_engine/` currently contains retrieval experiments and evaluation material; it is not a runtime service.
@@ -45,14 +45,15 @@ docker compose build backend
 docker compose up backend
 ```
 
-For AI-team development only:
+For the complete local conversation stack:
 
 ```text
-docker compose --profile ai up --build -d ollama helpdesk-api
-docker compose --profile ai exec ollama ollama pull qwen2.5:1.5b-instruct
+docker compose --profile ai up --build
 ```
 
-The Ollama image and `qwen2.5:1.5b-instruct` model are too large to assume they fit the challenge's stated 4 GB storage limit alongside the remaining stack. The `ai` profile is therefore a workstation integration environment until the target storage image is measured.
+`ollama-model-init` creates `ct-robot` from `Modelfile.txt` and pulls its Qwen 2.5 1.5B base automatically when absent.
+
+The Ollama image and `qwen2.5:1.5b` model are too large to assume they fit the challenge's stated 4 GB storage limit alongside the remaining stack. The `ai` profile is therefore a workstation integration environment until the target storage image is measured.
 
 ## Compatibility with the event API guide
 
@@ -132,17 +133,23 @@ Tts__Enabled=true
 Tts__Executable=espeak-ng
 ```
 
-`appsettings.Development.json` and the development Docker Compose file explicitly enable the marked mock answer so the pipeline can be exercised before Ollama is connected. A production deployment must use `ASPNETCORE_ENVIRONMENT=Production` and leave that flag disabled.
+`appsettings.Development.json` enables the marked mock answer only for direct local .NET development when the helpdesk adapter is disabled. Docker Compose disables mock answers so a missing model produces `503` instead of a pretend patient answer.
 
-## Ollama handoff
+Docker Compose disables mock answers and enables the internal model adapter:
 
-The teammate implementing Qwen should add an `OllamaChatModelClient : IChatModelClient` and replace this registration in `ApiGateway/Program.cs`:
-
-```csharp
-builder.Services.AddSingleton<IChatModelClient, DevelopmentChatModelClient>();
+```text
+Helpdesk__Enabled=true
+Helpdesk__BaseUrl=http://helpdesk-api:8000
+Conversation__EnableDevelopmentResponses=false
 ```
 
-The adapter receives the bounded `IReadOnlyList<ConversationMessage>`, language, and cancellation token. It should not add a second persistent conversation store or log message contents. Ollama/model container wiring is intentionally deferred until that implementation is ready.
+## Ollama integration
+
+- ApiGateway owns device validation, request correlation, bounded in-memory sessions, reset, and TTS.
+- `HelpdeskChatModelClient` sends only `user`/`assistant` text and the requested language to `POST /internal/chat`.
+- `helpdesk-api` adds no second session store and does not expose audio, STT, robot discovery, workflow publication, or public chat routes.
+- The model prompt forbids diagnosis, patient-specific medical advice, invented logistics, and unsupported safety claims.
+- Provider failures and timeouts become a safe `503` response from ApiGateway.
 
 ## Privacy boundary
 

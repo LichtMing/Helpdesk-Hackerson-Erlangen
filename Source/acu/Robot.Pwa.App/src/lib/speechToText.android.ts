@@ -12,6 +12,7 @@ import {
   VAD_MODEL_ASSET,
   WHISPER_MODEL_ASSET,
   type HandsFreeSpeechOptions,
+  type SpeechLanguage,
   type SpeechToText,
 } from "./speechTypes";
 
@@ -192,9 +193,14 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
       this.activeTranscriptionStop = null;
       const text = result.result.trim();
       if (!text) throw new Error("检测到说话，但没有识别出文字。");
+      const configuredLanguage = this.options?.getLanguage() ?? "auto";
+      const detectedLanguage =
+        configuredLanguage === "auto" && isSpeechLanguage(result.language)
+          ? result.language
+          : configuredLanguage;
 
       this.options?.onStateChange("delivering");
-      await this.options?.onTranscript(text);
+      await this.options?.onTranscript(text, detectedLanguage);
     } catch (error) {
       this.reportError(error instanceof Error ? error : new Error(String(error)));
     } finally {
@@ -260,4 +266,8 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
 
 export function createSpeechToText(): SpeechToText {
   return new AndroidHandsFreeSpeechToText();
+}
+
+function isSpeechLanguage(value: string): value is Exclude<SpeechLanguage, "auto"> {
+  return value === "en" || value === "de" || value === "zh";
 }

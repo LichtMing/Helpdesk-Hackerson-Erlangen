@@ -63,7 +63,21 @@ builder.Services.AddSingleton<AcuSettingsStore>();
 // ── Patient conversation (memory only; no transcript persistence) ─────────
 builder.Services.AddSingleton<ConversationSessionStore>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ConversationSessionStore>());
-builder.Services.AddSingleton<IChatModelClient, DevelopmentChatModelClient>();
+if (builder.Configuration.GetValue("Helpdesk:Enabled", false))
+{
+    builder.Services.AddHttpClient<IChatModelClient, HelpdeskChatModelClient>((services, client) =>
+    {
+        var configuration = services.GetRequiredService<IConfiguration>();
+        var baseUrl = configuration["Helpdesk:BaseUrl"] ?? "http://helpdesk-api:8000";
+        client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+        client.Timeout = TimeSpan.FromSeconds(
+            Math.Clamp(configuration.GetValue("Helpdesk:TimeoutSeconds", 60), 5, 180));
+    });
+}
+else
+{
+    builder.Services.AddSingleton<IChatModelClient, DevelopmentChatModelClient>();
+}
 builder.Services.AddSingleton<ConversationService>();
 builder.Services.AddSingleton<ISpeechSynthesizer, EspeakSpeechSynthesizer>();
 

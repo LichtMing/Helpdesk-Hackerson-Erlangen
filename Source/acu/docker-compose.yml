@@ -14,9 +14,12 @@ services:
       - WorkflowDataPath=/data/workflows.json
       - RobotWorkflowDataPath=/data/robot-workflows.json
       - AcuSettingsDataPath=/data/acu-settings.json
-      - Conversation__EnableDevelopmentResponses=true
+      - Conversation__EnableDevelopmentResponses=false
       - Conversation__SessionIdleTimeoutMinutes=5
       - Conversation__MaxTurns=6
+      - Helpdesk__Enabled=true
+      - Helpdesk__BaseUrl=http://helpdesk-api:8000
+      - Helpdesk__TimeoutSeconds=60
       - Tts__Enabled=true
       - Tts__Executable=espeak-ng
       - ASPNETCORE_ENVIRONMENT=Development
@@ -34,9 +37,8 @@ services:
       - backend
     restart: unless-stopped
 
-  # Internal AI boundary. It is intentionally not published to the host: the
-  # robot must use the .NET gateway on port 3000. The current implementation
-  # is still a placeholder and is not wired into IChatModelClient yet.
+  # Internal text-only AI boundary. The robot sends recognized text to the
+  # .NET gateway; raw microphone audio never enters this service.
   helpdesk-api:
     profiles: ["ai"]
     build:
@@ -44,12 +46,12 @@ services:
       dockerfile: helpdesk_api/Dockerfile
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_MODEL=qwen2.5:1.5b-instruct
+      - OLLAMA_MODEL=ct-robot
     expose:
       - "8000"
     depends_on:
-      ollama:
-        condition: service_healthy
+      ollama-model-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   # Optional local-development model runtime. Models live in a named volume
@@ -68,6 +70,20 @@ services:
       timeout: 5s
       retries: 12
     restart: unless-stopped
+
+  ollama-model-init:
+    profiles: ["ai"]
+    image: ollama/ollama:0.40.8
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    volumes:
+      - ./Modelfile.txt:/model/Modelfile:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama create ct-robot -f /model/Modelfile"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
 
   mdns:
     profiles: ["lan"]

@@ -1,2 +1,7 @@
 <Solution>
+  <Project Path="ACU.FE/ACU.FE.csproj" />
+  <Project Path="ApiGateway/ApiGateway.csproj" />
+  <Project Path="BE/AcuStorage/AcuStorage.csproj" />
+  <Project Path="BE/MdnsAdvertiser/MdnsAdvertiser.csproj" />
+  <Project Path="Robot.Pwa.App/Robot.Pwa.App.csproj" />
 </Solution>
