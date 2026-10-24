@@ -558,7 +558,11 @@ _UNWELL = re.compile(r"sleepy|drowsy|\btired\b|dizzy|faint|\bsick\b|unwell|nause
 _WARM = re.compile(r"\bwarm|\bhot\b|flush|metal(lic)? taste|taste of metal|like (i'?m|i am) (peeing|weeing)|wet myself|geschmack|hei\u00df", re.I)
 _CONTRAST = re.compile(r"contrast|\bdye\b|inject|substance|liquid|vein|kontrast|spritze|vene|mittel|taste|geschmack|peeing|weeing|wet myself", re.I)
 
+_LEAVING = re.compile(r"run(ning)? away|i'?m leaving|i am leaving|i('?ll| will) leave|(want|wanna|going) to leave|let me leave|at the door|i'?m going home|let me go home|want to go|wanna go|get out|i'?m out|don'?t want (it|this|the scan)|weg(laufen|gehen)|(will|m\u00f6chte|gehe) nach hause|will nicht", re.I)
+
 _POLISH_TEXT = {
+    "leaving": {"en": "Please don't worry, you are not alone. Please stay here for a moment. I am letting the radiology team know, so someone can come and talk with you.",
+                "de": "Keine Sorge, Sie sind nicht allein. Bitte bleiben Sie einen Moment hier. Ich gebe dem Radiologie-Team Bescheid, damit jemand mit Ihnen spricht."},
     "thanks": {"en": "You're welcome. I'm here if you have any more questions about your scan.",
                "de": "Gern geschehen. Ich bin hier, wenn Sie noch Fragen zu Ihrer Untersuchung haben."},
     "bye": {"en": "Goodbye, and all the best for your scan.",
@@ -576,6 +580,8 @@ def _polish_route(question: str) -> str | None:
     q = question.strip()
     if _URGENT_HINT.search(q):
         return None  # leave anything possibly urgent to the safety layer
+    if _LEAVING.search(q):
+        return "leaving"
     if _WARM.search(q) and _CONTRAST.search(q):
         return "contrast_feel"
     if _UNWELL.search(q):
@@ -591,6 +597,8 @@ def _polish_route(question: str) -> str | None:
 
 
 def _shorten(answer: str, max_sentences: int = 2) -> str:
+    answer = re.sub(r"[*#_`]+", "", answer)  # no markdown in spoken answers
+    answer = re.sub(r"\s*\n+\s*", " ", answer)
     parts = [x for x in re.split(r"(?<=[.!?])\s+", answer.strip()) if x]
     if len(parts) > 1 and not parts[-1].rstrip().endswith((".", "!", "?")):
         parts = parts[:-1]  # drop a sentence that was cut off
@@ -604,9 +612,9 @@ def answer_question(device_id, session_id, question, language):
     kind = _polish_route(question)
     if kind is not None:
         lang = "de" if str(language).startswith("de") else "en"
-        if kind == "unwell":
-            print(f"\n>>> STAFF ATTENTION (unwell) requested by robot {device_id}\n", flush=True)
-            return _POLISH_TEXT[kind][lang], "safety:unwell"
+        if kind in ("unwell", "leaving"):
+            print(f"\n>>> STAFF ATTENTION ({kind}) requested by robot {device_id}\n", flush=True)
+            return _POLISH_TEXT[kind][lang], f"safety:{kind}"
         return _POLISH_TEXT[kind][lang], f"approved:{kind}"
     answer, route = _answer_question_inner(device_id, session_id, question, language)
     if route == "model":
