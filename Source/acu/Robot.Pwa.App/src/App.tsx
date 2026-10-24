@@ -39,6 +39,30 @@ import {
 import { createSpeechToText } from "./lib/speechToText";
 import type { SpeechLanguage, SpeechState } from "./lib/speechTypes";
 
+// Short guided breathing exercise the robot speaks before it starts listening.
+const INTRO_STEPS: Record<"en" | "de", { text: string; pauseMs: number }[]> = {
+  en: [
+    { text: "Hello, I am your CT companion. Before we talk, let's take a calm breath together.", pauseMs: 500 },
+    { text: "Breathe in slowly through your nose.", pauseMs: 3500 },
+    { text: "And breathe out slowly through your mouth.", pauseMs: 4000 },
+    { text: "Once more. Breathe in.", pauseMs: 3500 },
+    { text: "And breathe out.", pauseMs: 4000 },
+    { text: "Well done. You can ask me anything about your CT scan. Just speak.", pauseMs: 0 },
+  ],
+  de: [
+    { text: "Hallo, ich bin Ihr CT-Begleiter. Bevor wir sprechen, atmen wir gemeinsam ruhig durch.", pauseMs: 500 },
+    { text: "Atmen Sie langsam durch die Nase ein.", pauseMs: 3500 },
+    { text: "Und langsam durch den Mund wieder aus.", pauseMs: 4000 },
+    { text: "Noch einmal. Einatmen.", pauseMs: 3500 },
+    { text: "Und ausatmen.", pauseMs: 4000 },
+    { text: "Sehr gut. Sie können mir jetzt jede Frage zu Ihrer CT-Untersuchung stellen.", pauseMs: 0 },
+  ],
+};
+const INTRO_BUBBLE: Record<"en" | "de", string> = {
+  en: "Let's take two calm breaths together. Breathe in slowly… and out. Then ask me anything about your CT scan.",
+  de: "Atmen wir zweimal ruhig durch. Langsam ein… und aus. Dann können Sie mir jede Frage zu Ihrer CT-Untersuchung stellen.",
+};
+
 type AppStage = "loading" | "setup" | "connecting" | "pending" | "conversation";
 type TextConfigField = Exclude<keyof RobotConfig, "language">;
 
@@ -324,6 +348,7 @@ function ConversationScreen(props: {
   useEffect(() => {
     let mounted = true;
     let starting = false;
+    let introPlaying = true;
 
     const options = {
       getLanguage: () => configRef.current.language,
@@ -371,7 +396,7 @@ function ConversationScreen(props: {
     };
 
     const startListening = async () => {
-      if (starting) return;
+      if (starting || introPlaying) return;
       starting = true;
       try {
         await speechToText.start(options);
@@ -385,7 +410,34 @@ function ConversationScreen(props: {
       }
     };
 
-    void startListening();
+    const playIntro = async () => {
+      const lang = configRef.current.language === "de" ? "de" : "en";
+      const steps = INTRO_STEPS[lang];
+      setMessages((prev) => [...prev, { id: `intro-${Date.now()}`, role: "assistant" as const, text: INTRO_BUBBLE[lang] }]);
+      setMessage("Guided breathing before listening starts…");
+      setIsSpeaking(true);
+      try {
+        const clips = await Promise.all(
+          steps.map((step) => synthesizeSpeech(configRef.current, step.text, lang)),
+        );
+        for (let i = 0; i < clips.length; i += 1) {
+          if (!mounted) return;
+          await playWaveResponse(clips[i], `intro-${i}`);
+          const pause = steps[i].pauseMs;
+          if (pause > 0) await new Promise((resolve) => setTimeout(resolve, pause));
+        }
+      } catch {
+        // If the intro cannot be played, go straight to listening.
+      } finally {
+        if (mounted) setIsSpeaking(false);
+      }
+    };
+
+    void (async () => {
+      await playIntro();
+      introPlaying = false;
+      if (mounted) await startListening();
+    })();
     const appStateSubscription = AppState.addEventListener("change", (nextState) => {
       if (!mounted) return;
       if (nextState === "active") {
