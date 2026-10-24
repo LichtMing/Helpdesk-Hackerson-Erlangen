@@ -21,6 +21,18 @@ const CHANNELS = 1;
 const BITS_PER_SAMPLE = 16;
 const MIN_RECORDING_BYTES = SAMPLE_RATE * (BITS_PER_SAMPLE / 8);
 const MAX_RECORDING_BYTES = MIN_RECORDING_BYTES * 30;
+// The native AudioRecord is released on its recording thread right after stop(),
+// which can take up to one full buffer (~0.5 s) to happen. Re-initializing before
+// that would let the old thread release the newly created recorder.
+const NATIVE_RECORDER_RELEASE_MS = 700;
+
+const AUDIO_STREAM_CONFIG = {
+  sampleRate: SAMPLE_RATE,
+  channels: CHANNELS,
+  bitsPerSample: BITS_PER_SAMPLE,
+  audioSource: 6,
+  bufferSize: 16 * 1024,
+};
 
 class AndroidHandsFreeSpeechToText implements SpeechToText {
   private whisperContext: WhisperContext | null = null;
@@ -37,6 +49,7 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
   private streamError: string | null = null;
   private activeTranscriptionStop: (() => Promise<void>) | null = null;
   private processingPromise: Promise<void> | null = null;
+  private audioStreamStoppedAt = 0;
 
   private initialize(): Promise<void> {
     if (this.whisperContext && this.vadContext && this.vad) {
@@ -115,17 +128,11 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
 
       this.running = true;
       this.resetUtterance();
-      this.audioStream.onData(({ data }) => {
-        if (this.running && !this.processing) this.vad?.processAudio(data);
-      });
-      this.audioStream.onError((error) => this.reportError(new Error(error)));
-      await this.audioStream.initialize({
-        sampleRate: SAMPLE_RATE,
-        channels: CHANNELS,
-        bitsPerSample: BITS_PER_SAMPLE,
-        audioSource: 6,
-        bufferSize: 16 * 1024,
-      });
+      await this.openAudioStream();
+      if (!this.startRequested) {
+        this.running = false;
+        return;
+      }
       await this.audioStream.start();
       this.options.onStateChange("listening");
     } catch (error) {
@@ -133,6 +140,33 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
       this.running = false;
       throw error;
     }
+  }
+
+  /**
+   * The native recorder is released as soon as recording stops, so a fresh
+   * AudioRecord must be created before every listening session. Re-using the
+   * stream after stop() silently fails: the native start() sees a null recorder
+   * and returns without throwing, which is why only the first question used to
+   * be recognized.
+   */
+  private async openAudioStream(): Promise<void> {
+    const elapsed = Date.now() - this.audioStreamStoppedAt;
+    if (this.audioStreamStoppedAt > 0 && elapsed < NATIVE_RECORDER_RELEASE_MS) {
+      await delay(NATIVE_RECORDER_RELEASE_MS - elapsed);
+    }
+    // initialize() releases the previous stream and clears its callbacks,
+    // therefore the data/error handlers have to be re-bound afterwards.
+    await this.audioStream.initialize(AUDIO_STREAM_CONFIG);
+    this.audioStream.onData(({ data }) => {
+      if (this.running && !this.processing) this.vad?.processAudio(data);
+    });
+    this.audioStream.onError((error) => this.reportError(new Error(error)));
+  }
+
+  private async stopAudioStream(): Promise<void> {
+    if (!this.audioStream.isRecording()) return;
+    await this.audioStream.stop();
+    this.audioStreamStoppedAt = Date.now();
   }
 
   private bindVadCallbacks(vad: RingBufferVad): void {
@@ -169,7 +203,7 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
   private async processUtterance(): Promise<void> {
     this.processing = true;
     try {
-      await this.audioStream.stop();
+      await this.stopAudioStream();
       if (this.streamError) throw new Error(this.streamError);
       if (!this.whisperContext) throw new Error("The Whisper model has not been initialized.");
       if (this.byteCount < MIN_RECORDING_BYTES) return;
@@ -211,8 +245,11 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
 
       if (this.running) {
         try {
-          await this.audioStream.start();
-          this.options?.onStateChange("listening");
+          await this.openAudioStream();
+          if (this.running) {
+            await this.audioStream.start();
+            this.options?.onStateChange("listening");
+          }
         } catch (error) {
           this.running = false;
           this.reportError(error instanceof Error ? error : new Error(String(error)));
@@ -241,7 +278,7 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
         // The original start call reports initialization failures.
       }
     }
-    if (this.audioStream.isRecording()) await this.audioStream.stop();
+    await this.stopAudioStream();
     if (this.activeTranscriptionStop) await this.activeTranscriptionStop();
     if (this.processingPromise) await this.processingPromise;
     await this.vad?.reset();
@@ -270,4 +307,8 @@ export function createSpeechToText(): SpeechToText {
 
 function isSpeechLanguage(value: string): value is Exclude<SpeechLanguage, "auto"> {
   return value === "en" || value === "de" || value === "zh";
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
