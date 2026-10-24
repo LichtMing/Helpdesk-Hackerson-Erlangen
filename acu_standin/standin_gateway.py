@@ -313,7 +313,7 @@ def ask_model(history: list[dict], question: str) -> str:
     response = requests.post(
         f"{OLLAMA_URL}/api/chat",
         json={"model": OLLAMA_MODEL, "messages": messages, "stream": False,
-              "keep_alive": "30m", "options": {"num_ctx": 4096, "temperature": 0.1, "num_predict": 110, "repeat_penalty": 1.2}},
+              "keep_alive": "30m", "options": {"num_ctx": 4096, "temperature": 0.1, "num_predict": 70, "repeat_penalty": 1.2}},
         timeout=60,
     )
     response.raise_for_status()
@@ -546,6 +546,72 @@ async def reset(request: Request):
     with LOCK:
         cleared = SESSIONS.pop((body["deviceId"], str(body.get("sessionId", ""))), None) is not None
     return {"sessionId": body.get("sessionId"), "cleared": cleared, "resetAt": now_iso()}
+
+
+
+# ---------------------------------------------------------------- DEMO POLISH (small talk, unwell, contrast feelings, short model answers)
+_URGENT_HINT = re.compile(r"breath|atem|luft|chest|brust|swell|swollen|throat|hals|rash|hives|ausschlag|pain|schmerz|bleed|blut", re.I)
+_THANKS = re.compile(r"\b(thanks?|thank you|cheers|danke|dankesch\u00f6n|vielen dank)\b", re.I)
+_BYE = re.compile(r"\b(bye|goodbye|see you|tsch\u00fcss|auf wiedersehen)\b", re.I)
+_HELLO = re.compile(r"^\W*(hello|hi|hey|good (morning|afternoon)|hallo|guten (morgen|tag))\b", re.I)
+_UNWELL = re.compile(r"sleepy|drowsy|\btired\b|dizzy|faint|\bsick\b|unwell|nause|not feel(ing)? (well|good)|feel (bad|weird|strange)|m\u00fcde|schwindel|\u00fcbel|schlecht|unwohl", re.I)
+_WARM = re.compile(r"\bwarm|\bhot\b|flush|metal(lic)? taste|taste of metal|like (i'?m|i am) (peeing|weeing)|wet myself|geschmack|hei\u00df", re.I)
+_CONTRAST = re.compile(r"contrast|\bdye\b|inject|substance|liquid|vein|kontrast|spritze|vene|mittel|taste|geschmack|peeing|weeing|wet myself", re.I)
+
+_POLISH_TEXT = {
+    "thanks": {"en": "You're welcome. I'm here if you have any more questions about your scan.",
+               "de": "Gern geschehen. Ich bin hier, wenn Sie noch Fragen zu Ihrer Untersuchung haben."},
+    "bye": {"en": "Goodbye, and all the best for your scan.",
+            "de": "Auf Wiedersehen und alles Gute f\u00fcr Ihre Untersuchung."},
+    "hello": {"en": "Hello! I can answer questions about your CT scan. What would you like to know?",
+              "de": "Hallo! Ich beantworte gern Fragen zu Ihrer CT-Untersuchung. Was m\u00f6chten Sie wissen?"},
+    "unwell": {"en": "Thank you for telling me. Please tell the radiology team how you are feeling. I will let them know now.",
+               "de": "Danke, dass Sie es mir sagen. Bitte sagen Sie dem Radiologie-Team, wie es Ihnen geht. Ich gebe ihnen jetzt Bescheid."},
+    "contrast_feel": {"en": "That is normal. When the contrast medium is injected, you may feel hot and flushed, notice a metal taste in your mouth, or feel like you are peeing when you are not. These feelings usually pass quickly. If you feel unwell, please tell the radiographer.",
+                      "de": "Das ist normal. Wenn das Kontrastmittel gespritzt wird, kann Ihnen warm werden, Sie k\u00f6nnen einen metallischen Geschmack im Mund haben oder das Gef\u00fchl, Wasser zu lassen, obwohl das nicht so ist. Diese Gef\u00fchle gehen meist schnell vorbei. Wenn Sie sich unwohl f\u00fchlen, sagen Sie es bitte dem Radiologie-Team."},
+}
+
+
+def _polish_route(question: str) -> str | None:
+    q = question.strip()
+    if _URGENT_HINT.search(q):
+        return None  # leave anything possibly urgent to the safety layer
+    if _WARM.search(q) and _CONTRAST.search(q):
+        return "contrast_feel"
+    if _UNWELL.search(q):
+        return "unwell"
+    if len(q.split()) <= 6:
+        if _THANKS.search(q):
+            return "thanks"
+        if _BYE.search(q):
+            return "bye"
+        if _HELLO.search(q):
+            return "hello"
+    return None
+
+
+def _shorten(answer: str, max_sentences: int = 2) -> str:
+    parts = [x for x in re.split(r"(?<=[.!?])\s+", answer.strip()) if x]
+    if len(parts) > 1 and not parts[-1].rstrip().endswith((".", "!", "?")):
+        parts = parts[:-1]  # drop a sentence that was cut off
+    return " ".join(parts[:max_sentences]).strip() or answer.strip()
+
+
+_answer_question_inner = answer_question
+
+
+def answer_question(device_id, session_id, question, language):
+    kind = _polish_route(question)
+    if kind is not None:
+        lang = "de" if str(language).startswith("de") else "en"
+        if kind == "unwell":
+            print(f"\n>>> STAFF ATTENTION (unwell) requested by robot {device_id}\n", flush=True)
+            return _POLISH_TEXT[kind][lang], "safety:unwell"
+        return _POLISH_TEXT[kind][lang], f"approved:{kind}"
+    answer, route = _answer_question_inner(device_id, session_id, question, language)
+    if route == "model":
+        answer = _shorten(answer)
+    return answer, route
 
 
 if __name__ == "__main__":

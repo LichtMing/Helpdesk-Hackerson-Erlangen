@@ -22,5 +22,5 @@ export interface SpeechToText {
   isListening(): boolean;
 }
 
-export const WHISPER_MODEL_ASSET = "models/ggml-tiny.bin";
+export const WHISPER_MODEL_ASSET = "models/ggml-base.bin";
 export const VAD_MODEL_ASSET = "models/ggml-silero-v6.2.0.bin";

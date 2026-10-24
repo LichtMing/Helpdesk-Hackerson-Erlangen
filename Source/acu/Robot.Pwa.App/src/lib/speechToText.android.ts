@@ -37,6 +37,7 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
   private streamError: string | null = null;
   private activeTranscriptionStop: (() => Promise<void>) | null = null;
   private processingPromise: Promise<void> | null = null;
+  private lastStopAt = 0;
 
   private initialize(): Promise<void> {
     if (this.whisperContext && this.vadContext && this.vad) {
@@ -115,24 +116,32 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
 
       this.running = true;
       this.resetUtterance();
-      this.audioStream.onData(({ data }) => {
-        if (this.running && !this.processing) this.vad?.processAudio(data);
-      });
-      this.audioStream.onError((error) => this.reportError(new Error(error)));
-      await this.audioStream.initialize({
-        sampleRate: SAMPLE_RATE,
-        channels: CHANNELS,
-        bitsPerSample: BITS_PER_SAMPLE,
-        audioSource: 6,
-        bufferSize: 16 * 1024,
-      });
-      await this.audioStream.start();
+      await this.openMicrophone();
       this.options.onStateChange("listening");
     } catch (error) {
       this.startRequested = false;
       this.running = false;
       throw error;
     }
+  }
+
+  // The native recorder frees itself every time it stops, so it must be
+  // created again before each new question (otherwise only question 1 works).
+  private async openMicrophone(): Promise<void> {
+    const sinceStop = Date.now() - this.lastStopAt;
+    if (sinceStop < 800) await new Promise((resolve) => setTimeout(resolve, 800 - sinceStop));
+    await this.audioStream.initialize({
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      bitsPerSample: BITS_PER_SAMPLE,
+      audioSource: 6,
+      bufferSize: 16 * 1024,
+    });
+    this.audioStream.onData(({ data }) => {
+      if (this.running && !this.processing) this.vad?.processAudio(data);
+    });
+    this.audioStream.onError((error) => this.reportError(new Error(error)));
+    await this.audioStream.start();
   }
 
   private bindVadCallbacks(vad: RingBufferVad): void {
@@ -170,6 +179,7 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
     this.processing = true;
     try {
       await this.audioStream.stop();
+      this.lastStopAt = Date.now();
       if (this.streamError) throw new Error(this.streamError);
       if (!this.whisperContext) throw new Error("Whisper 模型尚未初始化。");
       if (this.byteCount < MIN_RECORDING_BYTES) return;
@@ -211,7 +221,7 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
 
       if (this.running) {
         try {
-          await this.audioStream.start();
+          await this.openMicrophone();
           this.options?.onStateChange("listening");
         } catch (error) {
           this.running = false;
@@ -241,7 +251,10 @@ class AndroidHandsFreeSpeechToText implements SpeechToText {
         // The original start call reports initialization failures.
       }
     }
-    if (this.audioStream.isRecording()) await this.audioStream.stop();
+    if (this.audioStream.isRecording()) {
+      await this.audioStream.stop();
+      this.lastStopAt = Date.now();
+    }
     if (this.activeTranscriptionStop) await this.activeTranscriptionStop();
     if (this.processingPromise) await this.processingPromise;
     await this.vad?.reset();

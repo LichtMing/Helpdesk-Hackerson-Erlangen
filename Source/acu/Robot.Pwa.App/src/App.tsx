@@ -347,11 +347,7 @@ function ConversationScreen(props: {
         });
         if (!mounted) return;
         setAnswer(reply.answer);
-        const route = String((reply as { route?: unknown }).route ?? "");
-        setMessages((prev) => [...prev, {
-          id: `a-${reply.requestId}`, role: "assistant" as const, text: reply.answer,
-          source: route.startsWith("approved") ? "Siemens CT Guide" : undefined,
-        }].slice(-20));
+        setMessages((prev) => [...prev, { id: `a-${reply.requestId}`, role: "assistant" as const, text: reply.answer }].slice(-20));
         setMessage(reply.isMock
           ? "Development response received; requesting ACU speech…"
           : "ACU answer received; requesting ACU speech…");
@@ -423,7 +419,6 @@ function ConversationScreen(props: {
       phase={phase}
       isSpeaking={isSpeaking}
       messages={messages}
-      onAppendMessage={(m) => setMessages((prev) => [...prev, m].slice(-20))}
       helpRequested={helpRequested}
       onRequestHelp={handleHelp}
       onStaffSetup={props.onChangeSetup}
