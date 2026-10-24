@@ -9,6 +9,7 @@ services:
       - "3000:3000"
     volumes:
       - acu-data:/data                # persists devices.json & workflows.json across restarts
+      - piper-models:/models:ro       # verified Piper ONNX voices
     environment:
       - DataPath=/data/devices.json
       - WorkflowDataPath=/data/workflows.json
@@ -21,9 +22,22 @@ services:
       - Helpdesk__BaseUrl=http://helpdesk-api:8000
       - Helpdesk__TimeoutSeconds=60
       - Tts__Enabled=true
-      - Tts__Executable=espeak-ng
+      - Tts__Provider=Piper
+      - Tts__PiperExecutable=python3
+      - Tts__PiperScript=/app/piper_synthesize.py
+      - Tts__ModelDirectory=/models
+      - Tts__EnglishVoice=en_US-lessac-medium
+      - Tts__GermanVoice=de_DE-thorsten-medium
+      - Tts__ChineseVoice=zh_CN-huayan-medium
+      - Tts__LengthScale=1.0
+      - Tts__SentenceSilenceSeconds=0.15
+      - Tts__TimeoutSeconds=60
+      - Tts__Executable=espeak-ng      # fallback only when Tts__Provider=Espeak
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://0.0.0.0:3000   # override appsettings so the container listens on all interfaces
+    depends_on:
+      piper-model-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   frontend:
@@ -53,6 +67,20 @@ services:
       ollama-model-init:
         condition: service_completed_successfully
     restart: unless-stopped
+
+  # One-shot download/verify of the Piper voices into a named volume. It reuses
+  # the backend image, which already contains piper-tts and the verify script.
+  piper-model-init:
+    image: acu-backend
+    pull_policy: never
+    entrypoint: ["python3", "/app/prepare_piper_voices.py", "--data-dir", "/models"]
+    command:
+      - en_US-lessac-medium
+      - de_DE-thorsten-medium
+      - zh_CN-huayan-medium
+    volumes:
+      - piper-models:/models
+    restart: "no"
 
   # Optional local-development model runtime. Models live in a named volume
   # and are never committed to Git. Do not enable this profile on the 4 GB
@@ -100,3 +128,4 @@ services:
 volumes:
   acu-data:
   ollama-data:
+  piper-models:

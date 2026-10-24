@@ -263,8 +263,9 @@ APPROVED_ANSWERS = [
             "Bei einer Spritze kann Ihnen warm werden, Sie können einen metallischen Geschmack spüren oder das Gefühl haben, Wasser zu lassen. "
             "Diese Gefühle vergehen meist schnell."}),
     ("anxiety",
-     [r"small spaces?", r"claustro", r"anxious", r"nervous", r"scared", r"afraid", r"worried",
-      r"platzangst", r"\bangst\b", r"nerv[oö]s", r"sorge"],
+     # Explicit claustrophobia wording only. General nervousness is left to the model so
+     # the reply can respond to the individual patient instead of a fixed template.
+     [r"small spaces?", r"claustro", r"platzangst", r"\bangst\b"],
      {"en": "It is completely normal to feel nervous. The CT scanner is a ring, not a long tunnel, and the radiographer can hear and speak to you the whole time. "
             "If you feel anxious or have a fear of small spaces, please tell the radiology team. They may be able to give you a medicine to help you relax.",
       "de": "Es ist ganz normal, nervös zu sein. Der CT-Scanner ist ein Ring, keine lange Röhre, und das Personal kann Sie die ganze Zeit hören und mit Ihnen sprechen. "
@@ -310,10 +311,12 @@ def ask_model(history: list[dict], question: str) -> str:
             f"{GUIDE_TEXT}\n\nPatient question: {question}"
         )
     messages = history[-6:] + [{"role": "user", "content": content}]
+    # num_predict is only a runaway guard for the small model; brevity is guided by the
+    # prompt, not enforced by generation length.
     response = requests.post(
         f"{OLLAMA_URL}/api/chat",
         json={"model": OLLAMA_MODEL, "messages": messages, "stream": False,
-              "keep_alive": "30m", "options": {"num_ctx": 4096, "temperature": 0.1, "num_predict": 70, "repeat_penalty": 1.2}},
+              "keep_alive": "30m", "options": {"num_ctx": 4096, "temperature": 0.1, "num_predict": 256, "repeat_penalty": 1.2}},
         timeout=60,
     )
     response.raise_for_status()
@@ -323,17 +326,16 @@ def ask_model(history: list[dict], question: str) -> str:
     return tidy_answer(answer)
 
 
-def tidy_answer(text: str, max_sentences: int = 3) -> str:
-    """Spoken answers must be short: drop list markers and repeats, keep a few sentences."""
+def tidy_answer(text: str) -> str:
+    """Clean up spoken formatting only: drop list markers and repeated lines. The
+    answer is never shortened here; length comes from the prompt."""
     lines, seen = [], set()
     for line in text.splitlines():
         line = re.sub(r"^\s*([-*•]|\d+[.)])\s*", "", line).strip()
         if line and line.lower() not in seen:
             seen.add(line.lower())
             lines.append(line if line.endswith((".", "!", "?", ":")) else line + ".")
-    sentences = re.split(r"(?<=[.!?])\s+", " ".join(lines))
-    short = " ".join(sentences[:max_sentences]).replace(":.", ".").strip()
-    return short.rstrip(":") or text
+    return " ".join(lines).replace(":.", ".").strip().rstrip(":") or text
 
 
 def first_sentences(text: str, n: int = 3) -> str:
@@ -590,13 +592,6 @@ def _polish_route(question: str) -> str | None:
     return None
 
 
-def _shorten(answer: str, max_sentences: int = 2) -> str:
-    parts = [x for x in re.split(r"(?<=[.!?])\s+", answer.strip()) if x]
-    if len(parts) > 1 and not parts[-1].rstrip().endswith((".", "!", "?")):
-        parts = parts[:-1]  # drop a sentence that was cut off
-    return " ".join(parts[:max_sentences]).strip() or answer.strip()
-
-
 _answer_question_inner = answer_question
 
 
@@ -608,10 +603,8 @@ def answer_question(device_id, session_id, question, language):
             print(f"\n>>> STAFF ATTENTION (unwell) requested by robot {device_id}\n", flush=True)
             return _POLISH_TEXT[kind][lang], "safety:unwell"
         return _POLISH_TEXT[kind][lang], f"approved:{kind}"
-    answer, route = _answer_question_inner(device_id, session_id, question, language)
-    if route == "model":
-        answer = _shorten(answer)
-    return answer, route
+    # Model answers are returned as generated: length is guided by the prompt only.
+    return _answer_question_inner(device_id, session_id, question, language)
 
 
 if __name__ == "__main__":

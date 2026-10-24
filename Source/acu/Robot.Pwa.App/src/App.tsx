@@ -29,6 +29,13 @@ import {
   verifyApprovedRobot,
 } from "./lib/deviceApi";
 import { playWaveResponse } from "./lib/responsePlayer";
+import {
+  pauseAmbientSound,
+  resumeAmbientSound,
+  setAmbientSoundLevel,
+  startAmbientSound,
+  stopAmbientSound,
+} from "./lib/ambientSound";
 import { requestStaffHelp } from "./lib/helpRequest";
 import PatientScreen, { type ChatMessage } from "./PatientScreen";
 import {
@@ -322,6 +329,23 @@ function ConversationScreen(props: {
   }, [props.config]);
 
   useEffect(() => {
+    void startAmbientSound();
+    return () => {
+      void stopAmbientSound();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (phase === "stopped") {
+      setAmbientSoundLevel("paused");
+    } else if (isSpeaking || phase === "speech-detected") {
+      setAmbientSoundLevel("speaking");
+    } else {
+      setAmbientSoundLevel("listening");
+    }
+  }, [phase, isSpeaking]);
+
+  useEffect(() => {
     let mounted = true;
     let starting = false;
 
@@ -390,9 +414,11 @@ function ConversationScreen(props: {
       if (!mounted) return;
       if (nextState === "active") {
         setMessage("App active; resuming hands-free listening…");
+        void resumeAmbientSound();
         void startListening();
       } else {
         setMessage("App is in the background; microphone listening is paused.");
+        void pauseAmbientSound();
         void speechToText.stop();
       }
     });

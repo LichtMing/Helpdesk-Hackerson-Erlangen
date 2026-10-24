@@ -116,4 +116,4 @@ export interface Workflow {
   updatedAt: string;
 }
 
-export type AppTab = "requests" | "devices" | "workflows" | "settings" | "patient";
+export type AppTab = "requests" | "devices" | "workflows" | "settings";

@@ -14,8 +14,9 @@ Despite the historical name, this is an Expo/React Native Android application. I
 6. The multilingual whisper.cpp base model transcribes the utterance locally through `whisper.rn`.
 7. The app sends the text to `POST /api/chat`. Raw microphone audio never goes to ACU.
 8. The app requests `POST /api/tts`, pauses listening, plays the returned WAV, deletes the temporary audio, and resumes listening.
-9. Moving the app to the background pauses the microphone. Returning to the foreground resumes it.
-10. Leaving the conversation releases native resources and requests `POST /api/reset`.
+9. A bundled ambient loop plays quietly while the robot is listening, ducks while it speaks, and fades out while paused. It is optional: playback failure never blocks the conversation.
+10. Moving the app to the background pauses the microphone. Returning to the foreground resumes it.
+11. Leaving the conversation releases native resources and requests `POST /api/reset`.
 
 Development mode can return an explicitly marked `isMock: true` response until the Ollama adapter is connected. It must not be treated as a patient answer.
 
@@ -23,8 +24,8 @@ Development mode can return an explicitly marked `isMock: true` response until t
 
 Requirements:
 
-- Node.js 22.20 or newer and npm
-- Android Studio, JDK, Android SDK, and platform tools
+- Node.js 22.20 or newer and npm (verified with Node 22.22.3 / npm 10.9.8)
+- Android Studio, JDK 17, Android SDK, and platform tools
 - An Android emulator or target robot with a microphone
 - A reachable ACU ApiGateway
 
@@ -41,7 +42,14 @@ npm run test:transcript
 npm run test:conversation
 ~~~
 
-`models:prepare` downloads pinned Whisper and Silero VAD assets and verifies their sizes and SHA-256 hashes. The binaries live in `android/app/src/main/assets/models/` and are intentionally ignored by Git.
+`models:prepare` downloads pinned Whisper and Silero VAD assets and verifies their sizes and SHA-256 hashes:
+
+| Asset | Size (bytes) | SHA-256 |
+| --- | --- | --- |
+| `ggml-base.bin` | 147,951,465 | `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe` |
+| `ggml-silero-v5.1.2.bin` | 885,098 | `2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987` |
+
+The binaries live in `android/app/src/main/assets/models/` and are intentionally ignored by Git.
 
 The Android emulator reaches the host ACU through `http://10.0.2.2:3000`. A physical robot must use the ACU computer's reachable LAN address, for example `http://192.168.1.100:3000`.
 
@@ -69,11 +77,22 @@ src/lib/conversationApi.ts
 src/lib/responsePlayer.android.ts
   temporary WAV playback and immediate cache deletion
 
+src/lib/ambientSound.android.ts
+  low-volume looping ambience with level changes and fades
+
+src/lib/ambientSound.ts
+  silent web/iOS stub for the same interface
+
 src/lib/transcriptApi.ts
   retained UTF-8 transport test for the older transcript endpoint
+
+assets/audio/ambience-loop.wav
+  bundled room-tone loop (about 1.1 MB)
 ~~~
 
-`speechToText.ts` and `responsePlayer.ts` are non-Android stubs. The web command previews layout only; it does not test native recording or inference.
+`speechToText.ts`, `responsePlayer.ts`, and `ambientSound.ts` are non-Android
+stubs. The web command previews layout only; it does not test native recording,
+inference, or ambience playback.
 
 ## Later development APK build
 
@@ -88,11 +107,14 @@ That command first verifies both model assets, runs Gradle `assembleDebug`, and 
 ## Testing and diagnostics
 
 - `npm run typecheck`: strict TypeScript validation.
-- `npm run test:config`: robot configuration normalization and corrupted-data handling.
-- `npm run test:device`: ACU health, registration, approval, MAC verification, and error propagation.
-- `npm run test:transcript`: Unicode transcript transport and rejected-device handling.
-- `npm run test:conversation`: chat correlation, WAV validation, reset, and unavailable-model errors.
+- `npm run test:config`: robot configuration normalization and corrupted-data handling (3 tests).
+- `npm run test:device`: ACU health, registration, approval, MAC verification, and error propagation (2 tests).
+- `npm run test:transcript`: Unicode transcript transport and rejected-device handling (2 tests).
+- `npm run test:conversation`: chat correlation, WAV validation, reset, and unavailable-model errors (4 tests).
 - `npm run models:check`: missing/corrupted embedded model detection.
-- `adb logcat`: native Android, microphone, Whisper, and playback diagnostics.
+- `npm run test:web`: Playwright layout checks for the web preview.
+- `adb logcat`: native Android, microphone, Whisper, playback, and ambience diagnostics.
 
-On a real device, verify microphone permission, supported CPU ABI, available RAM/storage, LAN access to ACU, and sustained inference temperature before treating the APK as robot-compatible.
+The four node test commands total **11 passing tests** in the final revision.
+
+On a real device, verify microphone permission, supported CPU ABI, available RAM/storage, LAN access to ACU, and sustained inference temperature before treating the APK as robot-compatible. Review the ambience asset's licence before distributing a product image.

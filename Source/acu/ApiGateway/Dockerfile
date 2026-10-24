@@ -25,13 +25,16 @@ RUN dotnet publish ApiGateway/ApiGateway.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Offline prototype TTS. The gateway reads WAV bytes from stdout and never
-# writes patient text or generated audio to the container filesystem.
+# Piper is the default offline neural TTS. eSpeak NG remains an explicit
+# low-resource fallback. Both return WAV through stdout without persisting text.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends espeak-ng \
+    && apt-get install -y --no-install-recommends espeak-ng python3 python3-pip \
+    && python3 -m pip install --break-system-packages --no-cache-dir piper-tts==1.8.0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/publish .
+COPY ApiGateway/Tts/piper_synthesize.py /app/piper_synthesize.py
+COPY ApiGateway/Tts/prepare_piper_voices.py /app/prepare_piper_voices.py
 
 VOLUME ["/data"]
 EXPOSE 3000

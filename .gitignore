@@ -8,6 +8,9 @@ desktop.ini
 /.codex/
 /.agents/
 
+# Local tool downloads (JDK/SDK/Gradle staging)
+/.tools/
+
 # IDE and editor-local state
 .vs/
 .idea/

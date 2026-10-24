@@ -16,7 +16,9 @@ function run(command, args, cwd) {
 run(process.execPath, [modelScript, "--check"], projectRoot);
 
 if (process.platform === "win32") {
-  run("gradlew.bat", ["assembleDebug"], androidDirectory);
+  // Node cannot spawn .bat files directly on Windows (EINVAL), so run the
+  // wrapper through the command processor.
+  run("cmd.exe", ["/d", "/s", "/c", "gradlew.bat", "assembleDebug"], androidDirectory);
 } else {
   run("bash", ["gradlew", "assembleDebug"], androidDirectory);
 }

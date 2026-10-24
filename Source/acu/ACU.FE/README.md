@@ -2,6 +2,10 @@
 
 A mobile-first PWA for managing and orchestrating ACU robot devices. Built with React + TypeScript + Vite, themed after the Siemens Healthineers visual identity (Healthineers Orange `#EC6602` on clinical neutrals, generous spacing).
 
+The console is **monitoring-only**: it shows registered robots, pending approval
+requests, workflow assignments, and live workflow progress. The former patient
+preview tab was removed; patient interaction happens on the robot screen.
+
 ## Highlights
 
 - **Cross-platform PWA** — installable on Android, iOS and desktop browsers (Add to Home Screen on iOS Safari, native install prompt on Chromium).
@@ -50,31 +54,76 @@ src/
   features/
     requests/RequestsView.tsx  Connection requests + filter
     devices/DevicesView.tsx    Master/detail with assign-workflow sheet
-    devices/WorkflowTimeline.tsx
+    devices/WorkflowTimeline.tsx Live workflow progress
     workflows/WorkflowsView.tsx Create/edit/delete + bottom-sheet editor
+    workflows/robot/            Robot-specific workflow editor
     settings/SettingsView.tsx  App (language) + About (System Information) tabs
 
   pwa/registerServiceWorker.ts
+
+tests/                         Vitest + Testing Library unit tests
+e2e/specs/                     Playwright operator-flow specs
 ```
 
 ## Scripts
 
 ```bash
-npm run dev       # Vite dev server (proxies /api → ApiGateway)
-npm run build     # tsc + vite build → dist/
-npm run preview   # Preview the built bundle
+npm run dev          # Vite dev server (proxies /api → ApiGateway)
+npm run build        # tsc + vite build → dist/
+npm run preview      # Preview the built bundle
+npm test             # Vitest unit tests (49 tests in 11 files)
+npm run test:watch   # Vitest watch mode
+npm run test:e2e     # Playwright (see limitations below)
 ```
 
 ## Local configuration
 
-Create `FE/.env` with:
+Create `ACU.FE/.env` with:
 
 ```env
 VITE_API_BASE_URL=http://localhost:3000
 ```
 
-See the [top-level README](../README.md#quick-start) for the full end-to-end
-local dev walkthrough (prerequisites, ports, troubleshooting).
+Leave `VITE_API_BASE_URL` empty for the Docker image; nginx then proxies `/api`
+to the `backend` service. See the [ACU solution README](../README.md) and the
+[repository README](../../../README.md) for the full end-to-end walkthrough.
+
+## Docker deployment
+
+```bash
+cd Source/acu
+docker compose build frontend
+docker compose up -d frontend
+```
+
+The UI is served on <http://localhost:3100>. The container builds with
+`VITE_API_BASE_URL=""` and `nginx.conf` forwards `/api/` to `backend:3000`.
+
+## Testing
+
+```bash
+npm test        # unit tests: 49 passing
+npm run build   # production type check + bundle
+```
+
+Playwright is configured for Chromium. The default `npm run test:e2e` path uses
+`e2e/scripts/start-gateway.ps1`, so it requires Windows, PowerShell, and the
+.NET SDK. On Linux/macOS, start the backend yourself and reuse it:
+
+```bash
+# terminal 1: gateway on :3000
+cd Source/acu && docker compose up -d backend
+
+# terminal 2: UI on :4173
+cd Source/acu/ACU.FE
+npm run dev -- --host 127.0.0.1 --port 4173
+
+# terminal 3
+npx playwright test e2e/specs/operator-flows.spec.ts
+```
+
+`e2e/specs/live-workflow-simulator.spec.ts` additionally expects a
+`RobotSimulator` project that is not part of this repository snapshot.
 
 ## Installing as a PWA
 
@@ -82,10 +131,3 @@ local dev walkthrough (prerequisites, ports, troubleshooting).
 - **iOS Safari:** Share → *Add to Home Screen*. The status bar uses the `apple-mobile-web-app-status-bar-style` setting; the launcher icon uses `apple-touch-icon.svg`.
 
 The service worker is only registered in production builds, so dev HMR is unaffected.
-
-## Recent changes
-
-See [../doc/CHANGES.md](../doc/CHANGES.md) for a team-ready walkthrough of
-the latest FE refactor — architectural restructure, ARIA correctness,
-offline UX overhaul, adaptive polling, Settings App/About tabs, central
-icon registry, and the icon-semantics audit.

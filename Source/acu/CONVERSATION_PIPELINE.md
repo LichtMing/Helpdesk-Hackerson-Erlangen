@@ -2,7 +2,12 @@
 
 This repository implements the complete text conversation boundary from the Android robot to the local Qwen model.
 
-The existing event API reference is `Doc/api-guide.pdf`. That guide was checked against the gateway on 2026-10-22, before the conversation endpoints in this branch were added. After deployment, the running `/docs` Swagger UI remains the final contract.
+Related documents: [`README.md`](README.md) (solution overview),
+[`../../docs/REPRODUCIBILITY.md`](../../docs/REPRODUCIBILITY.md) (pinned
+versions and rebuild steps), and [`../../helpdesk_api/API.md`](../../helpdesk_api/API.md)
+(internal adapter contract).
+
+The existing event API reference is `Doc/api-guide.pdf`. That guide was checked against the gateway on 2026-10-22, before the conversation endpoints described here were added. After deployment, the running Swagger UI at `/swagger` remains the final contract.
 
 ## Runtime flow
 
@@ -12,7 +17,7 @@ The existing event API reference is `Doc/api-guide.pdf`. That guide was checked 
 4. `ConversationService` holds a bounded conversation history in process memory.
 5. `HelpdeskChatModelClient` sends the bounded text history to the internal `helpdesk-api`, which calls the local `ct-robot` Ollama model. Raw audio, robot credentials, and persistent patient data are not sent to that service.
 6. The robot sends the answer text to `POST /api/tts`.
-7. The ACU runs offline eSpeak NG and streams a WAV response without creating an audio file.
+7. The ACU runs offline Piper neural TTS (with eSpeak NG as a fallback) and streams a WAV response without creating an audio file.
 8. The robot stores the WAV only in its cache, pauses listening while it plays, deletes it, and resumes listening.
 9. `POST /api/reset`, the five-minute idle timeout, or gateway shutdown clears the application-level session memory.
 
@@ -31,10 +36,11 @@ Robot Android app
 ACU operator browser -> frontend:3100
 ```
 
-- `backend` and `frontend` are the default development services.
+- `backend`, `frontend`, and the one-shot `piper-model-init` are the default development services.
 - `helpdesk-api`, `ollama`, and the one-shot `ollama-model-init` service are opt-in through the `ai` Compose profile. Neither internal port is published to the host.
 - `mdns` is opt-in through the `lan` profile because host multicast behavior differs on Docker Desktop.
 - `Robot.Pwa.App` remains an Android application because it needs microphone, native Whisper/VAD, and audio playback access.
+- The operator frontend is monitoring-only: it shows device state and workflow progress. Patient interaction stays on the robot screen.
 - `ai_engine/` currently contains retrieval experiments and evaluation material; it is not a runtime service.
 
 Validate the default stack without downloading the model runtime:
@@ -51,7 +57,7 @@ For the complete local conversation stack:
 docker compose --profile ai up --build
 ```
 
-`ollama-model-init` creates `ct-robot` from `Modelfile.txt` and pulls its Qwen 2.5 1.5B base automatically when absent.
+`ollama-model-init` creates `ct-robot` from `Modelfile.txt` and pulls its Qwen 2.5 1.5B base automatically when absent. After editing `Modelfile.txt`, re-run that service (`docker compose --profile ai up -d --force-recreate ollama-model-init`) so the stored model picks up the new system prompt.
 
 The Ollama image and `qwen2.5:1.5b` model are too large to assume they fit the challenge's stated 4 GB storage limit alongside the remaining stack. The `ai` profile is therefore a workstation integration environment until the target storage image is measured.
 
@@ -107,7 +113,7 @@ When development responses are disabled and no real model adapter has been regis
 }
 ```
 
-The successful response is `audio/wav` with `Cache-Control: no-store`. The current Docker image installs eSpeak NG as the prototype offline engine. `ISpeechSynthesizer` is the replacement boundary for Piper or another approved engine.
+The successful response is `audio/wav` with `Cache-Control: no-store`. The Docker image installs Piper neural TTS as the default engine and keeps eSpeak NG as an explicit low-resource fallback selected with `Tts__Provider`. Piper voices live in the `piper-models` volume; `ISpeechSynthesizer` remains the replacement boundary for another approved engine.
 
 ### `POST /api/reset`
 
@@ -130,7 +136,12 @@ Conversation__EnableDevelopmentResponses=false
 Conversation__SessionIdleTimeoutMinutes=5
 Conversation__MaxTurns=6
 Tts__Enabled=true
-Tts__Executable=espeak-ng
+Tts__Provider=Piper
+Tts__ModelDirectory=/models
+Tts__EnglishVoice=en_US-lessac-medium
+Tts__GermanVoice=de_DE-thorsten-medium
+Tts__ChineseVoice=zh_CN-huayan-medium
+Tts__Executable=espeak-ng          # fallback only
 ```
 
 `appsettings.Development.json` enables the marked mock answer only for direct local .NET development when the helpdesk adapter is disabled. Docker Compose disables mock answers so a missing model produces `503` instead of a pretend patient answer.
@@ -149,6 +160,7 @@ Conversation__EnableDevelopmentResponses=false
 - `HelpdeskChatModelClient` sends only `user`/`assistant` text and the requested language to `POST /internal/chat`.
 - `helpdesk-api` adds no second session store and does not expose audio, STT, robot discovery, workflow publication, or public chat routes.
 - The model prompt forbids diagnosis, patient-specific medical advice, invented logistics, and unsupported safety claims.
+- The prompt also carries tone and length guidance: acknowledge the patient's feeling in a few words, answer the exact question in two or three short spoken sentences, use plain everyday wording without Markdown or lists, and keep Chinese and German natural and spoken rather than formal. This is prompt-level guidance only; the safety rules are unchanged and no code-level truncation or content filter is applied.
 - Provider failures and timeouts become a safe `503` response from ApiGateway.
 
 ## Privacy boundary

@@ -18,9 +18,10 @@ Those responsibilities already exist in the robot app and ApiGateway.
 
 ## Endpoints
 
-- `GET /api/health`: verifies that Ollama is reachable.
-- `POST /internal/chat`: accepts bounded `user`/`assistant` text messages
-  and returns one model answer.
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/health` | Verifies that Ollama is reachable |
+| `POST` | `/internal/chat` | Accepts bounded `user`/`assistant` text and returns one model answer |
 
 Example request:
 
@@ -33,13 +34,78 @@ Example request:
 }
 ~~~
 
+Response:
+
+~~~json
+{
+  "answer": "A CT scan usually takes between 10 and 20 minutes.",
+  "language": "en",
+  "is_mock": false
+}
+~~~
+
+The complete internal contract, including validation limits, is in
+[`API.md`](API.md).
+
+## Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama address |
+| `OLLAMA_MODEL` | `ct-robot` | Model created from `Source/acu/Modelfile.txt` |
+| `OLLAMA_TIMEOUT_SECONDS` | `45` | Upstream request timeout |
+
+Dependencies are pinned in [`requirements.txt`](requirements.txt):
+FastAPI `0.159.1`, Uvicorn `0.53.0`, requests `2.32.5`.
+
+## Run with Compose
+
 The service is started through the Compose `ai` profile. Port 8000 is exposed
 only to the internal Compose network.
 
 ~~~bash
 cd Source/acu
-docker compose --profile ai up --build
+docker compose --profile ai up -d --build
+docker compose --profile ai logs -f helpdesk-api
 ~~~
 
+## Run locally
+
+~~~bash
+cd helpdesk_api
+python3 -m pip install --requirement requirements.txt
+OLLAMA_BASE_URL=http://localhost:11434 OLLAMA_MODEL=ct-robot \
+  uvicorn main:app --host 0.0.0.0 --port 8000
+~~~
+
+## Tests
+
+The tests use the Python standard library's `unittest` and mock the Ollama HTTP
+call. Run them inside the pinned container so the dependency versions match:
+
+~~~bash
+cd Source/acu
+docker compose --profile ai build helpdesk-api
+docker compose --profile ai run --rm --no-deps \
+  -v "$PWD/../../helpdesk_api:/app" helpdesk-api \
+  python -m unittest discover -s tests -v
+~~~
+
+Expected: **4 tests pass**.
+
+## Limits and failure behaviour
+
+- Only `user` and `assistant` roles are accepted.
+- Each message is limited to 2,000 characters; at most 20 messages and 12,000
+  total characters are accepted.
+- Empty model output becomes `503`; the service never invents a fallback answer.
+- Only `en`, `de`, and `zh` are recognized; other language tags normalize to
+  `en`.
+
+## Privacy
+
 Raw audio remains on the robot. ApiGateway owns temporary conversation history
-and clears it through `POST /api/reset`.
+and clears it through `POST /api/reset`. This adapter keeps no session store and
+does not log patient text. See
+[`../Source/acu/CONVERSATION_PIPELINE.md`](../Source/acu/CONVERSATION_PIPELINE.md)
+for the end-to-end safety boundary.

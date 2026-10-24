@@ -68,8 +68,7 @@ APPROVED_ANSWERS = [
             "Bei einer Spritze kann Ihnen warm werden, Sie können einen metallischen Geschmack spüren oder das Gefühl haben, Wasser zu lassen. "
             "Diese Gefühle vergehen meist schnell."}),
     ("anxiety",
-     [r"small spaces?", r"claustro", r"anxious", r"nervous", r"scared", r"afraid", r"worried",
-      r"platzangst", r"\bangst\b", r"nerv[oö]s", r"sorge"],
+     [r"small spaces?", r"claustro", r"platzangst", r"\bangst\b"],
      {"en": "It is completely normal to feel nervous. The CT scanner is a ring, not a long tunnel, and the radiographer can hear and speak to you the whole time. "
             "If you feel anxious or have a fear of small spaces, please tell the radiology team. They may be able to give you a medicine to help you relax.",
       "de": "Es ist ganz normal, nervös zu sein. Der CT-Scanner ist ein Ring, keine lange Röhre, und das Personal kann Sie die ganze Zeit hören und mit Ihnen sprechen. "

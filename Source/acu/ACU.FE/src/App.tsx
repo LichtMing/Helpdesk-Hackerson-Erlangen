@@ -19,7 +19,6 @@ import DevicesView   from "./features/devices/DevicesView";
 import WorkflowsView from "./features/workflows/WorkflowsView";
 import RobotWorkflowsView from "./features/workflows/robot/RobotWorkflowsView";
 import SettingsView  from "./features/settings/SettingsView";
-import { DeviceList } from "./features/DeviceList";
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>("devices");
   const [creatingRobotWorkflow, setCreatingRobotWorkflow] = useState(false);
@@ -65,11 +64,6 @@ badgeTone: "neutral",
 id: "settings",
 label: t("navSettings"),
 icon: <MdSettings size={20} />,
-    },
-    {
-id: "patient",
-label: "Patient",
-icon: <span>👤</span>,
     },
   ];
 
@@ -130,8 +124,6 @@ icon: <span>👤</span>,
         )}
         {isServerOnline && activeTab === "settings" && <SettingsView />}
       </main>
-      {isServerOnline && activeTab === "patient" && <DeviceList />}
-
 
       {isServerOnline && <BottomNav items={navItems} active={activeTab} onChange={changeTab} />}
 
