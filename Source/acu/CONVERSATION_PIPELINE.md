@@ -4,10 +4,12 @@ This repository implements the complete text conversation boundary from the Andr
 
 Related documents: [`README.md`](README.md) (solution overview),
 [`../../docs/REPRODUCIBILITY.md`](../../docs/REPRODUCIBILITY.md) (pinned
-versions and rebuild steps), and [`../../helpdesk_api/API.md`](../../helpdesk_api/API.md)
-(internal adapter contract).
+versions and rebuild steps), [`../../docs/DEPENDENCIES.md`](../../docs/DEPENDENCIES.md)
+(complete dependency inventory), and
+[`../../helpdesk_api/API.md`](../../helpdesk_api/API.md) (internal adapter
+contract).
 
-The existing event API reference is `Doc/api-guide.pdf`. That guide was checked against the gateway on 2026-10-22, before the conversation endpoints described here were added. After deployment, the running Swagger UI at `/swagger` remains the final contract.
+The existing event API reference is `Doc/api-guide.pdf`. That guide was checked against the gateway on 2026-10-22, before the conversation endpoints described here were added. After deployment, the running Swagger UI at `/docs` remains the final contract.
 
 ## Runtime flow
 

@@ -1,22 +1,33 @@
+# Legacy backend-only Compose file.
+# The authoritative full-stack definition is ../docker-compose.yml, which also
+# builds the frontend, initializes Piper voices, and provides the `ai` profile.
+#
+# Use this file only when you deliberately want a single backend container
+# without the frontend or model adapter. It selects eSpeak because the Piper
+# voice volume is not initialized here; /api/chat still returns 503 until a
+# model adapter is reachable.
 services:
   acu-api-gateway:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: ApiGateway/Dockerfile
     image: acu-api-gateway:latest
     container_name: acu-api-gateway
     ports:
       - "3000:3000"
     volumes:
-      # Named volume persists devices.json between restarts.
-      # To share with the Go backend, point both services at the same volume.
+      # Named volume persists devices.json and workflows.json between restarts.
       - acu-data:/data
     environment:
-      - ASPNETCORE_URLS=http://+:4110
+      - ASPNETCORE_URLS=http://+:3000
       - DataPath=/data/devices.json
       - WorkflowDataPath=/data/workflows.json
-      # Override the data path if you mount a host directory instead:
-      # - DataPath=/data/devices.json
+      - RobotWorkflowDataPath=/data/robot-workflows.json
+      - AcuSettingsDataPath=/data/acu-settings.json
+      - Conversation__EnableDevelopmentResponses=false
+      - Helpdesk__Enabled=false
+      - Tts__Provider=Espeak
+      - Tts__Executable=espeak-ng
     restart: unless-stopped
 
 volumes:

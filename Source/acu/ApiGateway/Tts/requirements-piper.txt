@@ -1,0 +1,3 @@
+# Direct dependency for offline Piper TTS in the backend image.
+# The fully resolved Python 3.12 set is in requirements-piper.lock.
+piper-tts==1.8.0

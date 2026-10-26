@@ -24,21 +24,38 @@ Robot app
 ## Requirements
 
 - Python 3.10+
-- `pip install --requirement acu_standin/requirements.txt`
+- `pip install --requirement acu_standin/requirements.lock` (19 pinned packages;
+  direct dependencies are listed in `requirements.txt`). The full inventory is
+  in [`../docs/DEPENDENCIES.md`](../docs/DEPENDENCIES.md).
 - Optional: a local Ollama server with the `ct-robot` model
 - Optional TTS:
   - Piper voices in `helpdesk_api/voices/` (`en_US-lessac-medium.onnx`,
-    `de_DE-thorsten-medium.onnx`) with `piper-tts` installed, or
+    `de_DE-thorsten-medium.onnx`) with `piper-tts==1.8.0` installed. The exact
+    Python 3.12 set is in
+    `Source/acu/ApiGateway/Tts/requirements-piper.lock`, or
   - macOS `say` + `afconvert` for the built-in voices.
 
-Without either TTS backend, `/api/tts` returns `503`. Chat still works.
+To download and verify the Piper voices for the stand-in on Python 3.12 (the
+version the lockfile targets):
+
+```bash
+python3.12 -m pip install --requirement Source/acu/ApiGateway/Tts/requirements-piper.lock
+python3.12 Source/acu/ApiGateway/Tts/prepare_piper_voices.py \
+  --data-dir helpdesk_api/voices en_US-lessac-medium de_DE-thorsten-medium
+```
+
+On Python 3.10, install `piper-tts==1.8.0` instead and let pip resolve a
+compatible ONNX Runtime/NumPy set; the exact 3.12 lock does not install there.
+
+Without either TTS backend, `/api/tts` returns `503`. Chat still works. Chinese
+TTS is not implemented in the stand-in; use the full ACU backend for `zh_CN`.
 
 ## Run
 
 From the repository root:
 
 ```bash
-python3 -m pip install --requirement acu_standin/requirements.txt
+python3 -m pip install --requirement acu_standin/requirements.lock
 python3 acu_standin/standin_gateway.py
 ```
 

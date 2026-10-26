@@ -6,7 +6,16 @@ the gateway to the internal model adapter and offline TTS.
 
 For the project overview, safety notes, and the full quick start, read the
 [repository README](../../README.md). For the conversation and privacy
-contracts, read [CONVERSATION_PIPELINE.md](CONVERSATION_PIPELINE.md).
+contracts, read [CONVERSATION_PIPELINE.md](CONVERSATION_PIPELINE.md). For the
+complete dependency inventory and rebuild procedure, read
+[`docs/DEPENDENCIES.md`](../../docs/DEPENDENCIES.md) and
+[`docs/REPRODUCIBILITY.md`](../../docs/REPRODUCIBILITY.md). Deployment trust
+boundaries and hardening notes are in
+[`docs/SECURITY.md`](../../docs/SECURITY.md).
+
+`docker-compose.yml` in this directory is the authoritative stack. The files
+`ApiGateway/docker-compose.yml` and `ACU.FE/docker-compose.yml` are legacy
+single-service helpers for backend-only or frontend-only debugging.
 
 ## Components
 
@@ -23,6 +32,19 @@ contracts, read [CONVERSATION_PIPELINE.md](CONVERSATION_PIPELINE.md).
 The internal adapter (`helpdesk_api/`) and the stand-in gateway (`acu_standin/`)
 live outside this directory because they are separate Python services.
 
+## Pinned toolchain and dependency files
+
+| Area | Pin | File |
+| --- | --- | --- |
+| .NET | `net10.0`, SDK/ASP.NET images `10.0` | `ApiGateway/ApiGateway.csproj`, `ApiGateway/Dockerfile` |
+| Frontend | Node `22.20+`, npm lockfile v3 | `ACU.FE/package.json`, `ACU.FE/package-lock.json` |
+| Robot | Expo `54.0.37`, React Native `0.81.4`, Node `22.20+` | `Robot.Pwa.App/package.json`, `Robot.Pwa.App/package-lock.json` |
+| Piper TTS | `piper-tts==1.8.0` plus ONNX Runtime transitives | `ApiGateway/Tts/requirements-piper.lock` |
+| Ollama | image `0.40.8`, base model `qwen2.5:1.5b` | `docker-compose.yml`, `Modelfile.txt` |
+
+The full table, including transitive counts, is in
+[`docs/DEPENDENCIES.md`](../../docs/DEPENDENCIES.md).
+
 ## Prerequisites
 
 - Docker Engine or Docker Desktop with Compose v2.
@@ -37,7 +59,7 @@ live outside this directory because they are separate Python services.
 | Service | Profile | Host port | Notes |
 | --- | --- | --- | --- |
 | `frontend` | default | `3100` | nginx serves the built UI and proxies `/api` to `backend` |
-| `backend` | default | `3000` | Public robot/API contract; Swagger at `/swagger` |
+| `backend` | default | `3000` | Public robot/API contract; Swagger UI at `/docs`, JSON at `/swagger/v1/swagger.json` |
 | `piper-model-init` | default (one-shot) | — | Downloads and verifies Piper voices into `piper-models` |
 | `helpdesk-api` | `ai` | — | Internal only; FastAPI → Ollama |
 | `ollama` | `ai` | — | Internal only; port `11434` not published |
@@ -59,7 +81,9 @@ curl -fsS -o /dev/null -w 'UI HTTP %{http_code}\n' http://localhost:3100/
 ```
 
 On a clean machine, `--build` is required because `piper-model-init` reuses the
-`acu-backend` image. The first AI start also pulls `qwen2.5:1.5b` and downloads
+`acu-backend` image. The Compose project name is fixed to `acu` in
+`docker-compose.yml`, so that image reference stays valid regardless of the
+checkout directory. The first AI start also pulls `qwen2.5:1.5b` and downloads
 three Piper voices; expect a multi-minute first run.
 
 Without the `ai` profile, the gateway still serves devices, workflows, and the
@@ -179,7 +203,7 @@ The full list of TTS voices and integrity checks is in
 - Operator endpoints for devices, requests, workflows, and settings.
 - `POST /api/chat`, `POST /api/tts`, `POST /api/reset` — conversation pipeline;
   see [CONVERSATION_PIPELINE.md](CONVERSATION_PIPELINE.md).
-- Swagger UI: `http://localhost:3000/swagger`.
+- Swagger UI: `http://localhost:3000/docs` (JSON: `http://localhost:3000/swagger/v1/swagger.json`).
 
 Robot requests are validated against the approved device registry (device ID
 and MAC). This is an application-state check, not authentication.
@@ -190,12 +214,15 @@ and MAC). This is an application-state check, not authentication.
 cd Source/acu
 docker compose --profile ai config --quiet
 docker compose build backend
+docker compose --profile ai build helpdesk-api
 cd ACU.FE && npm test && npm run build
 cd ../Robot.Pwa.App && npm run typecheck
 ```
 
-The authoritative, version-pinned procedure and expected test counts are in
-[`docs/REPRODUCIBILITY.md`](../../docs/REPRODUCIBILITY.md).
+The helpdesk test command, the Python lockfile install path, and the expected
+test counts are in
+[`docs/REPRODUCIBILITY.md`](../../docs/REPRODUCIBILITY.md). The full dependency
+inventory is in [`docs/DEPENDENCIES.md`](../../docs/DEPENDENCIES.md).
 
 ## Troubleshooting
 

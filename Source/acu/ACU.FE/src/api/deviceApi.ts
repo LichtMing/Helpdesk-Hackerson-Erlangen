@@ -2,7 +2,7 @@ import axios from 'axios';
 import type { DeviceRequest, RegisteredDevice, Instruction } from '../types';
 
 // Point at the C# ApiGateway. Override with VITE_API_BASE_URL in .env for local dev.
-// e.g. VITE_API_BASE_URL=http://INBLRGHVDICT581:3000
+// e.g. VITE_API_BASE_URL=http://localhost:3000
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 const apiClient = axios.create({

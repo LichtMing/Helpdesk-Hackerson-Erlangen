@@ -1,6 +1,10 @@
+# Legacy frontend-only Compose file.
+# The authoritative full-stack definition is ../docker-compose.yml on port 3100.
+# This file is useful for a standalone UI build; nginx still proxies /api to a
+# gateway that you must start separately.
 services:
   frontend:
     build: .
     container_name: acu-frontend
     ports:
-      - "5173:80"
+      - "3100:80"

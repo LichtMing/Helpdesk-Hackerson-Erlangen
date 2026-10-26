@@ -3,3 +3,4 @@
 !helpdesk_api/Dockerfile
 !helpdesk_api/main.py
 !helpdesk_api/requirements.txt
+!helpdesk_api/requirements.lock

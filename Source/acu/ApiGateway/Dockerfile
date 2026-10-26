@@ -27,10 +27,14 @@ WORKDIR /app
 
 # Piper is the default offline neural TTS. eSpeak NG remains an explicit
 # low-resource fallback. Both return WAV through stdout without persisting text.
+# The lockfile pins Piper and its ONNX Runtime transitives for Python 3.12.
+COPY ApiGateway/Tts/requirements-piper.lock /tmp/piper-requirements.lock
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends espeak-ng python3 python3-pip \
-    && python3 -m pip install --break-system-packages --no-cache-dir piper-tts==1.8.0 \
-    && rm -rf /var/lib/apt/lists/*
+    && python3 -m pip install --break-system-packages --no-cache-dir \
+        --requirement /tmp/piper-requirements.lock \
+    && rm -rf /var/lib/apt/lists/* /tmp/piper-requirements.lock
 
 COPY --from=build /app/publish .
 COPY ApiGateway/Tts/piper_synthesize.py /app/piper_synthesize.py

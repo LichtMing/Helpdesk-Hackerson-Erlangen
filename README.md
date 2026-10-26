@@ -14,6 +14,20 @@ frontend; patient interaction happens on the robot itself.
 This repository was built for the *C1 Smart Patient Robotic Companion*
 hackathon challenge (Erlangen, October 2026).
 
+## Reproducibility
+
+The repository is functionally reproducible from a clean clone. See
+[`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md) for the pinned revision,
+the rebuild procedure, and the verification log. The complete dependency
+inventory is in [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md), and the
+third-party licence review checklist is in
+[`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md).
+
+It is **not bit-for-bit reproducible**: container base images and Ollama model
+tags are not digest-pinned, NuGet transitives resolve at restore time, and
+Android Gradle/Maven dependencies resolve from remote repositories. The source,
+prompts, npm lockfiles, and Python lockfiles are pinned and committed.
+
 ## Architecture
 
 ```mermaid
@@ -61,6 +75,22 @@ adapter and Ollama stay on the internal Compose network.
 | `data/siemens_ct_guide.txt` | Source material used by the stand-in and prompts |
 | `Doc/` | Challenge statement and organizer API guide (PDF) |
 
+## Dependencies at a glance
+
+| Area | Direct dependencies | Lock / pin |
+| --- | --- | --- |
+| .NET gateway | 4 NuGet packages (`Swashbuckle`, `Configuration.Abstractions`, `Configuration.Binder`, `Makaretu.Dns.Multicast`) | Direct versions in `.csproj`; no NuGet lockfile |
+| `helpdesk-api` | FastAPI, Uvicorn, Requests, Pydantic | `helpdesk_api/requirements.lock` (18 packages, Python 3.12) |
+| `acu_standin` | FastAPI, Uvicorn, Requests, Pydantic | `acu_standin/requirements.lock` (19 packages, Python 3.10+) |
+| `ai_engine` | FastEmbed, NumPy | `ai_engine/requirements.lock` (34 packages, Python 3.10+) |
+| Piper TTS | `piper-tts` | `Source/acu/ApiGateway/Tts/requirements-piper.lock` (7 packages) |
+| Frontend | 4 runtime + 11 dev npm packages | `ACU.FE/package-lock.json` (165 entries) |
+| Robot app | 19 runtime + 6 dev npm packages | `Robot.Pwa.App/package-lock.json` (662 entries) |
+| Models | Whisper base, Silero VAD, 3 Piper voices, Qwen 2.5 1.5B, `ct-robot` | Size + SHA-256/MD5 checks, or Ollama registry |
+
+The full version table, container images, toolchain matrix, and update
+procedure are in [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md).
+
 ## Quick start (full stack)
 
 Prerequisites: Docker Engine/Desktop with Compose v2, about 8 GB free disk for
@@ -85,7 +115,7 @@ What happens on the first start:
 Open:
 
 - Operator UI: <http://localhost:3100>
-- Swagger: <http://localhost:3000/swagger>
+- Swagger UI: <http://localhost:3000/docs> (JSON: `/swagger/v1/swagger.json`)
 - Health: <http://localhost:3000/api/health>
 
 Verify:
@@ -158,14 +188,16 @@ Model adapter (requires Python 3.12 and a running Ollama):
 
 ```bash
 cd helpdesk_api
-python -m pip install --requirement requirements.txt
+python -m pip install --requirement requirements.lock
 OLLAMA_BASE_URL=http://localhost:11434 OLLAMA_MODEL=ct-robot \
   uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-For the no-Docker demo path used with the robot, run the stand-in gateway:
+For the no-Docker demo path used with the robot, install the pinned stand-in
+dependencies and run the gateway:
 
 ```bash
+python3 -m pip install --requirement acu_standin/requirements.lock
 python3 acu_standin/standin_gateway.py     # serves :3000 on this laptop
 ```
 
@@ -221,7 +253,10 @@ docker compose --profile ai run --rm --no-deps \
   python -m unittest discover -s tests -v
 ```
 
-Frontend end-to-end tests are optional and currently Windows-oriented; see
+Python services install their fully pinned `requirements.lock` files; the
+stand-in, evaluation, and retrieval commands are in
+[`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md). Frontend end-to-end tests
+are optional and currently Windows-oriented; see
 `Source/acu/ACU.FE/README.md` and the known limitations below.
 
 ## Documentation
@@ -240,6 +275,12 @@ Frontend end-to-end tests are optional and currently Windows-oriented; see
 - [`eval/README.md`](eval/README.md) — evaluation procedure and recordings.
 - [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md) — pinned versions,
   step-by-step rebuild, checksums, storage expectations, and verification log.
+- [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md) — complete dependency and
+  toolchain inventory, including transitive counts and update commands.
+- [`docs/SECURITY.md`](docs/SECURITY.md) — trust boundaries, data handling,
+  signing keys, and hardening checklist.
+- [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md) — third-party licence review
+  checklist.
 - [`docs/CHANGELOG.md`](docs/CHANGELOG.md) — final demo revision changes and
   verification results.
 
@@ -272,5 +313,15 @@ Frontend end-to-end tests are optional and currently Windows-oriented; see
   is on the robot screen.
 - Managed .NET and Python strings cannot guarantee forensic RAM erasure; the
   guarantee is no application-level persistence and prompt reference release.
+- Rebuilds are functional, not bit-for-bit: container base images, NuGet
+  transitives, the Ollama base-model tag, and Android Maven/Gradle dependencies
+  are not digest-locked. See
+  [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md#13-known-reproducibility-gaps).
+- The `ai_engine` experiment requires Python 3.10+ and pins NumPy 2.2.6; its
+  FastEmbed model is downloaded from Hugging Face without a pinned revision.
+- `npm audit` reports frontend and robot dependency advisories (no critical
+  after removing unused Swagger UI React); review them before a production
+  release. See [`docs/SECURITY.md`](docs/SECURITY.md#dependency-advisories-2026-10-26-snapshot).
 - Third-party licences (Piper voices, eSpeak NG, Qwen model, Whisper, Silero,
-  fonts) must be reviewed before product distribution.
+  fonts) must be reviewed before product distribution; see
+  [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md).

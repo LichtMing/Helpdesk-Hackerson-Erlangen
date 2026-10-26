@@ -10,11 +10,17 @@ started by Docker Compose. The production text path is
 | Path | Purpose |
 | --- | --- |
 | `test_embed.py` | Builds a small local embedding index and runs retrieval checks |
-| `requirements.txt` | Pinned experiment dependencies |
+| `requirements.txt` | Direct experiment dependencies |
+| `requirements.lock` | Fully resolved Python 3.10+ dependency set |
 | `docs/ct_patient_info.txt` | Patient-facing reference text |
 | `eval/questions.txt` | Evaluation question set |
 
-Dependencies are pinned: `fastembed==0.9.0`, `numpy==2.5.4`.
+Direct dependencies are declared in `requirements.txt` and fully resolved in
+`requirements.lock` (34 packages). Requires Python 3.10+. The lock pins
+`fastembed==0.9.0` and `numpy==2.2.6`; NumPy 2.5.x is only selected on
+Python 3.11+ by FastEmbed's environment markers, so 2.2.6 keeps the experiment
+usable on the documented Python 3.10 host. The full inventory is in
+[`../docs/DEPENDENCIES.md`](../docs/DEPENDENCIES.md).
 
 ## Setup and run
 
@@ -23,12 +29,14 @@ Use an isolated environment:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --requirement ai_engine/requirements.txt
+python -m pip install --requirement ai_engine/requirements.lock
 python ai_engine/test_embed.py
 ```
 
-The first run downloads the embedding model from Hugging Face. Later runs reuse
-the cache. No network access is needed for the retrieval logic itself.
+The first run downloads the `BAAI/bge-small-en-v1.5` embedding model from
+Hugging Face. The revision is not pinned, so the downloaded model can change
+independently of the Python lockfile. Later runs reuse the cache. No network
+access is needed for the retrieval logic itself.
 
 ## Generated files
 

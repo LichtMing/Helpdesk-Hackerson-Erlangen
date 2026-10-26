@@ -1,0 +1,3 @@
+# Direct dependency for eval/run_eval.py and eval/run_eval2.py.
+# Installing acu_standin/requirements.lock also provides this package.
+requests==2.32.5

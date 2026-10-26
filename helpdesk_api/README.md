@@ -55,8 +55,12 @@ The complete internal contract, including validation limits, is in
 | `OLLAMA_MODEL` | `ct-robot` | Model created from `Source/acu/Modelfile.txt` |
 | `OLLAMA_TIMEOUT_SECONDS` | `45` | Upstream request timeout |
 
-Dependencies are pinned in [`requirements.txt`](requirements.txt):
-FastAPI `0.159.1`, Uvicorn `0.53.0`, requests `2.32.5`.
+Direct dependencies are declared in [`requirements.txt`](requirements.txt) and
+fully resolved in [`requirements.lock`](requirements.lock) for Python 3.12
+(18 packages): FastAPI `0.159.1`, Uvicorn `0.53.0`, requests `2.32.5`,
+Pydantic `2.14.1`, plus their transitive packages. The Docker image installs the
+lockfile. See [`../docs/DEPENDENCIES.md`](../docs/DEPENDENCIES.md) for the full
+inventory.
 
 ## Run with Compose
 
@@ -71,9 +75,11 @@ docker compose --profile ai logs -f helpdesk-api
 
 ## Run locally
 
+Requires Python 3.12. Install the fully pinned lockfile:
+
 ~~~bash
 cd helpdesk_api
-python3 -m pip install --requirement requirements.txt
+python3.12 -m pip install --requirement requirements.lock
 OLLAMA_BASE_URL=http://localhost:11434 OLLAMA_MODEL=ct-robot \
   uvicorn main:app --host 0.0.0.0 --port 8000
 ~~~

@@ -5,8 +5,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY helpdesk_api/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir --requirement requirements.txt \
+# requirements.lock is the fully resolved Python 3.12 dependency set.
+COPY helpdesk_api/requirements.txt helpdesk_api/requirements.lock ./
+RUN pip install --no-cache-dir --requirement requirements.lock \
     && useradd --create-home --uid 10001 appuser
 
 COPY --chown=appuser:appuser helpdesk_api/main.py ./main.py

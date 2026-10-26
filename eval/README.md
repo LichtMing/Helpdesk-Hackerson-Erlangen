@@ -7,11 +7,14 @@ same `/api/chat` contract.
 
 ## Prerequisites
 
-1. A gateway on `http://localhost:3000` (stand-in or ACU backend).
-2. A robot identity that registers successfully. The scripts register
+1. Python 3.10+.
+2. A gateway on `http://localhost:3000` (stand-in or ACU backend).
+3. A robot identity that registers successfully. The scripts register
    `eval-robot` with MAC `02:00:00:00:00:01` and rely on auto-approval in the
    stand-in; on the production gateway, approve it in the operator UI first.
-3. `requests` installed (`pip install --requirement acu_standin/requirements.txt`).
+4. `requests` installed. Either install
+   `pip install --requirement eval/requirements.txt` or use the stand-in's fully
+   pinned `acu_standin/requirements.lock`.
 
 ## Scripts
 
@@ -74,4 +77,5 @@ real patient data. The stand-in itself does not log text unless `LOG_TEXT=1`.
 
 - [`../acu_standin/README.md`](../acu_standin/README.md)
 - [`../Source/acu/CONVERSATION_PIPELINE.md`](../Source/acu/CONVERSATION_PIPELINE.md)
+- [`../docs/DEPENDENCIES.md`](../docs/DEPENDENCIES.md)
 - [`../docs/REPRODUCIBILITY.md`](../docs/REPRODUCIBILITY.md)

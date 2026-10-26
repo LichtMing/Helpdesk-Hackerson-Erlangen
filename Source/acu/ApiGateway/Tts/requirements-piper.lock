@@ -1,0 +1,19 @@
+# Fully pinned Piper TTS lockfile for the Python 3.12 backend image.
+# Regenerate from the repository root with:
+#   uv pip compile Source/acu/ApiGateway/Tts/requirements-piper.txt \
+#     --python-version 3.12 \
+#     --output-file Source/acu/ApiGateway/Tts/requirements-piper.lock
+flatbuffers==25.12.19
+    # via onnxruntime
+numpy==2.5.4
+    # via onnxruntime
+onnxruntime==1.31.1
+    # via piper-tts
+packaging==26.3
+    # via onnxruntime
+pathvalidate==3.3.1
+    # via piper-tts
+piper-tts==1.8.0
+    # via -r Source/acu/ApiGateway/Tts/requirements-piper.txt
+protobuf==7.36.2
+    # via onnxruntime

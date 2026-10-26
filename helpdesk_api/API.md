@@ -30,3 +30,8 @@ Response:
 
 Only `user` and `assistant` roles are accepted. Message content and history
 length are bounded. No audio endpoint exists by design.
+
+The service runs on Python 3.12 with FastAPI `0.159.1` and Pydantic `2.14.1`.
+The Docker image installs `requirements.lock`, which pins all transitive
+packages; see [`README.md`](README.md) and
+[`../docs/DEPENDENCIES.md`](../docs/DEPENDENCIES.md).

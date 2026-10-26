@@ -20,6 +20,20 @@ Despite the historical name, this is an Expo/React Native Android application. I
 
 Development mode can return an explicitly marked `isMock: true` response until the Ollama adapter is connected. It must not be treated as a patient answer.
 
+## Toolchain and dependencies
+
+- Node.js `22.20+` (verified with `22.22.3`) and npm `10.9.8`.
+- `package-lock.json` v3 is committed and is the authoritative dependency set:
+  662 lockfile entries, 19 runtime dependencies, and 6 development
+  dependencies.
+- Runtime highlights: Expo `54.0.37`, React Native `0.81.4`, React `19.1.0`,
+  `whisper.rn` `0.7.4`, `@fugood/react-native-audio-pcm-stream` `1.1.4`,
+  `expo-audio` `1.1.1`, and `expo-file-system` `19.0.24`.
+- Native build: JDK 17, Gradle wrapper `8.14.3`, Android SDK/build tools managed
+  by Expo 54, and a microphone-capable device or emulator.
+- The complete version table is in
+  [`docs/DEPENDENCIES.md`](../../../docs/DEPENDENCIES.md).
+
 ## Prepare the project
 
 Requirements:
@@ -47,7 +61,7 @@ npm run test:conversation
 | Asset | Size (bytes) | SHA-256 |
 | --- | --- | --- |
 | `ggml-base.bin` | 147,951,465 | `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe` |
-| `ggml-silero-v5.1.2.bin` | 885,098 | `2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987` |
+| `ggml-silero-v6.2.0.bin` | 885,098 | `2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987` |
 
 The binaries live in `android/app/src/main/assets/models/` and are intentionally ignored by Git.
 
@@ -94,15 +108,16 @@ assets/audio/ambience-loop.wav
 stubs. The web command previews layout only; it does not test native recording,
 inference, or ambience playback.
 
-## Later development APK build
+## Development APK build
 
-The project is prepared for, but this work does not run, the APK build:
+The APK build is not part of the default Node test path; it needs the Android
+SDK, JDK 17, and the Gradle wrapper:
 
 ~~~text
 npm run build:apk
 ~~~
 
-That command first verifies both model assets, runs Gradle `assembleDebug`, and copies the result to `dist/acu-robot-development.apk`. The APK is debug-signed for development only. Production distribution requires an organization-controlled signing key and release configuration.
+That command first verifies both model assets, runs Gradle `assembleDebug`, and copies the result to `dist/acu-robot-development.apk`. The APK is debug-signed for development only. Production distribution requires an organization-controlled signing key and release configuration. The 2026-10-26 audit did not run this step because the Android SDK was not installed in that environment.
 
 ## Testing and diagnostics
 

@@ -1,2 +1,5 @@
+# FastEmbed 0.9.0 is compatible with NumPy 2.2.x on Python 3.10. NumPy 2.5.x
+# is only selected for Python 3.11+ by FastEmbed's environment markers, so
+# 2.2.6 keeps the experiment usable on the documented Python 3.10 host.
 fastembed==0.9.0
-numpy==2.5.4
+numpy==2.2.6

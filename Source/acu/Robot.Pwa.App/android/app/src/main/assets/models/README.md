@@ -7,12 +7,15 @@ npm run models:prepare
 npm run models:check
 ~~~
 
-The expected paths are:
+The expected paths and pinned integrity values are:
 
-~~~text
-android/app/src/main/assets/models/ggml-base.bin
-android/app/src/main/assets/models/ggml-silero-v6.2.0.bin
-~~~
+| File | Size (bytes) | SHA-256 |
+| --- | --- | --- |
+| `android/app/src/main/assets/models/ggml-base.bin` | 147,951,465 | `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe` |
+| `android/app/src/main/assets/models/ggml-silero-v6.2.0.bin` | 885,098 | `2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987` |
+
+The URLs and checks are defined in `scripts/prepare-speech-models.mjs`. Do not
+commit the binaries.
 
 Do not replace `ggml-base.bin` with `ggml-base.en.bin`; the robot needs multilingual English, German, and Chinese recognition.
 

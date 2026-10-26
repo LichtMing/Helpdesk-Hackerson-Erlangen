@@ -4,7 +4,37 @@ This guide records the exact toolchain, pinned assets, build commands, and
 verification results for the final demo revision. Follow it from a clean clone
 to rebuild the same system.
 
-Last verified: **2026-10-24** on Linux (Ubuntu, WSL2) with Docker Desktop.
+Repository: `git@github.com:LichtMing/Helpdesk-Hackerson-Erlangen.git`
+Base revision audited: `4e0bd64f522be1284e7c3edb8bba732d198aead7` (branch `main`)
+Full dependency inventory: [`DEPENDENCIES.md`](DEPENDENCIES.md)
+Third-party review checklist: [`THIRD_PARTY.md`](THIRD_PARTY.md)
+
+This audit adds Python lockfiles and documentation on top of that revision.
+Until those files are committed and pushed, a clean clone of `main` still has
+only the three `requirements.txt` files.
+
+Last verified: **2026-10-26** for the local Node/Python paths and
+**2026-10-24** for the full Docker stack (Linux/Ubuntu WSL2, Docker Desktop).
+
+## 0. Reproducibility verdict
+
+A fresh clone can rebuild the system functionally, but not bit-for-bit:
+
+| Layer | Status | Notes |
+| --- | --- | --- |
+| Source code, Compose files, Dockerfiles, prompts | Reproducible | Everything needed is tracked in Git |
+| Frontend and robot npm dependencies | Reproducible | `package-lock.json` v3 committed |
+| Python runtime dependencies | Reproducible | `requirements.lock` files committed |
+| Whisper, Silero, and Piper assets | Reproducible with network | Pinned URLs plus SHA-256/MD5 verification |
+| Ollama model | Reproducible with network | `qwen2.5:1.5b` tag is not digest-pinned |
+| .NET backend | Buildable, not fully locked | Direct NuGet versions pinned; transitives resolve at restore |
+| Container base images | Buildable, not fully locked | Version tags, no digest pins |
+| Android APK | Buildable with local Android SDK/JDK | Maven/Gradle deps resolve from remote repositories |
+| Playwright E2E | Partial | Default gateway bootstrap is Windows/PowerShell; one spec needs a missing `RobotSimulator` project |
+
+The primary supported path is the full Docker Compose stack, followed by the
+Node tests/builds and the Python stand-in. The Android APK and Docker stack
+require external toolchains that are not installed by `npm ci` or `pip`.
 
 ## 1. Clone
 
@@ -12,7 +42,7 @@ Last verified: **2026-10-24** on Linux (Ubuntu, WSL2) with Docker Desktop.
 git clone git@github.com:LichtMing/Helpdesk-Hackerson-Erlangen.git
 cd Helpdesk-Hackerson-Erlangen
 git switch main
-git rev-parse HEAD        # record this in the demo log
+git rev-parse HEAD        # expected: 4e0bd64f522be1284e7c3edb8bba732d198aead7
 ```
 
 No generated models, APKs, `dist/`, `bin/`, `obj/`, `node_modules/`, or virtual
@@ -28,18 +58,36 @@ or container and verified before use.
 | Node.js | `22.22.3` | Robot README requires 22.20+; frontend uses Vite 8 |
 | npm | `10.9.8` | Lockfiles are committed |
 | Python (adapter) | `3.12` (container image) | `helpdesk_api/Dockerfile` |
-| Python (host scripts) | `3.10.12` tested | Stand-in and eval scripts |
+| Python (backend TTS) | `3.12` (Ubuntu 24.04 `apt` in the ASP.NET image) | Piper lockfile |
+| Python (host scripts) | `3.10.12` tested | Stand-in, eval, and `ai_engine` |
 | Ollama | image `ollama/ollama:0.40.8` | Pinned in `docker-compose.yml` |
 | Base model | `qwen2.5:1.5b` | Pulled by `ollama-model-init` |
-| Piper TTS | `piper-tts==1.8.0` | Installed in the backend image |
-| FastAPI | `0.159.1` | `helpdesk_api/requirements.txt` |
-| Uvicorn | `0.53.0` | `helpdesk_api/requirements.txt` |
+| Piper TTS | `piper-tts==1.8.0` | Locked in `requirements-piper.lock` |
+| FastAPI | `0.159.1` | Adapter and stand-in |
+| Uvicorn | `0.53.0` | Adapter and stand-in |
 | requests | `2.32.5` | Adapter and stand-in |
-| React / Vite | `18.2` / `8.3.1` | `ACU.FE/package.json` |
-| Expo / React Native | `~54.0.0` / `0.81.4` | `Robot.Pwa.App/package.json` |
+| Pydantic | `2.14.1` | Adapter and stand-in |
+| React / Vite | `18.3.1` / `8.3.1` | Resolved in `ACU.FE/package-lock.json` |
+| Expo / React Native | `54.0.37` / `0.81.4` | Resolved in `Robot.Pwa.App/package-lock.json` |
+| JDK / Gradle | `17` / `8.14.3` | Android APK build |
+| Android SDK | Expo 54 managed levels | Android APK build |
+| uv (optional lock regeneration) | `0.11.17` verified | `uv pip compile` |
 
-Lockfiles: `Source/acu/ACU.FE/package-lock.json`,
-`Source/acu/Robot.Pwa.App/package-lock.json`.
+Lockfiles:
+
+- `Source/acu/ACU.FE/package-lock.json` (npm v3)
+- `Source/acu/Robot.Pwa.App/package-lock.json` (npm v3)
+- `helpdesk_api/requirements.lock` (Python 3.12, 18 packages)
+- `acu_standin/requirements.lock` (Python 3.10+, 19 packages)
+- `ai_engine/requirements.lock` (Python 3.10+, 34 packages)
+- `Source/acu/ApiGateway/Tts/requirements-piper.lock` (Python 3.12, 7 packages)
+
+The `.NET` projects use direct `PackageReference` versions but have no
+`packages.lock.json`; see the known gaps below.
+
+When audited on 2026-10-26, `mcr.microsoft.com/dotnet/aspnet:10.0` resolved to
+Ubuntu 24.04 and .NET `10.0.14`; `apt` therefore provides Python 3.12, matching
+the Piper lockfile. The tag is mutable, so re-check this if the base image moves.
 
 ## 3. Pinned model assets
 
@@ -50,10 +98,11 @@ Lockfiles: `Source/acu/ACU.FE/package-lock.json`,
 | Asset | Size (bytes) | SHA-256 |
 | --- | --- | --- |
 | `ggml-base.bin` (Whisper base) | `147951465` | `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe` |
-| `ggml-silero-v5.1.2.bin` (Silero VAD) | `885098` | `2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987` |
+| `ggml-silero-v6.2.0.bin` (Silero VAD) | `885098` | `2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987` |
 
 Files land in `Source/acu/Robot.Pwa.App/android/app/src/main/assets/models/`
-and are ignored by Git. `npm run models:check` re-verifies both.
+and are ignored by Git. `npm run models:check` re-verifies both. The pinned URL
+and hashes live in `Source/acu/Robot.Pwa.App/scripts/prepare-speech-models.mjs`.
 
 ### Piper voices
 
@@ -88,7 +137,8 @@ docker compose --profile ai up -d
 
 If the `acu-backend` image does not exist yet, the first `up --build` is
 required because `piper-model-init` reuses that image name with
-`pull_policy: never`:
+`pull_policy: never`. The Compose file sets the project name to `acu`, so the
+built image is always `acu-backend` even if the checkout directory is renamed:
 
 ```bash
 docker compose --profile ai up -d --build
@@ -174,6 +224,9 @@ docker compose up -d frontend
 
 ## 6. Rebuild and verify the model adapter
 
+The adapter image installs `helpdesk_api/requirements.lock`, which pins Python
+3.12 and all transitive packages:
+
 ```bash
 cd Source/acu
 docker compose --profile ai build helpdesk-api
@@ -185,6 +238,16 @@ docker compose --profile ai run --rm --no-deps \
 Expected: **4 tests pass**. The adapter accepts only bounded `user`/`assistant`
 text, calls Ollama's `/api/chat`, and returns `503` when the model output is
 empty or unavailable.
+
+Without Docker, the same lockfile can be installed into a Python 3.12 virtual
+environment:
+
+```bash
+python3.12 -m venv .venv-helpdesk
+. .venv-helpdesk/bin/activate
+python -m pip install --requirement helpdesk_api/requirements.lock
+cd helpdesk_api && python -m unittest discover -s tests -v
+```
 
 ## 7. Rebuild the robot app
 
@@ -219,12 +282,23 @@ works.
 
 ## 8. No-Docker demo path (stand-in gateway)
 
-Use this when only a laptop, Python, and optionally Ollama are available:
+Use this when only a laptop, Python 3.10+, and optionally Ollama are available.
+Install the fully pinned lockfile rather than only the direct dependencies:
 
 ```bash
-python3 -m pip install --requirement acu_standin/requirements.txt
+python3 -m pip install --requirement acu_standin/requirements.lock
 python3 acu_standin/standin_gateway.py
 ```
+
+Optional Piper TTS for the stand-in (the lock targets Python 3.12, matching the
+backend image):
+
+```bash
+python3.12 -m pip install --requirement Source/acu/ApiGateway/Tts/requirements-piper.lock
+```
+
+On Python 3.10, install `piper-tts==1.8.0` instead; pip resolves a compatible
+ONNX Runtime/NumPy set, but it will not match the 3.12 lock.
 
 Optional environment variables:
 
@@ -257,9 +331,14 @@ use:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install --requirement ai_engine/requirements.txt
+python -m pip install --requirement ai_engine/requirements.lock
 python ai_engine/test_embed.py
 ```
+
+The lock is resolved for Python 3.10 and also works on Python 3.12. It pins
+`numpy==2.2.6` because FastEmbed 0.9.0 requires `numpy<2.3` on Python 3.10.
+The BAAI/bge-small-en-v1.5 embedding model is downloaded from Hugging Face on
+first use; its revision is not pinned.
 
 Model caches, generated indexes, and virtual environments are ignored by Git.
 See [`ai_engine/README.md`](../ai_engine/README.md).
@@ -280,7 +359,39 @@ First full stack start: typically 5–20 minutes depending on network and cache.
 The first model answer after a cold start includes model load time; keep Ollama
 warm (`keep_alive` is set by the adapter path) for demo responsiveness.
 
-## 11. Verification log (2026-10-24)
+## 11. Verification log
+
+### 2026-10-26 — dependency and documentation audit
+
+Run on Linux/WSL2 with Node 22.22.3, npm 10.9.8, Python 3.10.12, and uv 0.11.17.
+The Docker daemon and Android SDK were not available in this environment, so
+the full Compose stack and APK build were not re-run here.
+
+| Check | Result |
+| --- | --- |
+| `python3 -m py_compile acu_standin/*.py eval/*.py ai_engine/test_embed.py` | pass |
+| `cd ACU.FE && npm ci` | pass; no extraneous packages |
+| `cd ACU.FE && npm test` | 49/49 pass in 11 files |
+| `cd ACU.FE && npm run build` | pass (109 modules, 296.43 kB JS) |
+| `cd Robot.Pwa.App && npm ci` | pass; no extraneous packages |
+| `cd Robot.Pwa.App && npm run typecheck` | pass |
+| Robot unit tests (4 commands) | 11/11 pass |
+| `cd Robot.Pwa.App && npm run models:check` | both assets valid |
+| `npm audit` snapshot | frontend 5 advisories (no critical); robot 12 (no critical) |
+| helpdesk unittest with Python 3.12 lock | 4/4 pass |
+| stand-in health and `eval/run_eval.py` | 15 questions, 4/4 medical cases routed to staff |
+| stand-in `eval/run_eval2.py` | 16 unseen paraphrases completed |
+| `ai_engine/test_embed.py` with Python 3.10 lock | pass (5 retrieval queries) |
+| Piper lockfile import (`piper`, `onnxruntime`) | pass |
+| Piper voice download + MD5 verification + WAV synthesis | pass (`en_US-lessac-medium`, 22,050 Hz mono 16-bit) |
+
+A clean `git clone` of `main` at `4e0bd64` confirmed that the GitHub revision
+had only the three `requirements.txt` files, no Python lockfiles, and a Silero
+documentation mismatch (`v5.1.2` in docs, `v6.2.0` in the download script). The
+lockfiles and corrections in this audit are follow-up changes on top of that
+revision.
+
+### 2026-10-24 — full Docker verification (historical)
 
 | Check | Result |
 | --- | --- |
@@ -313,6 +424,23 @@ start re-downloads voices and the model.
 
 ## 13. Known reproducibility gaps
 
+These do not block a functional rebuild, but they prevent byte-for-byte
+reproduction:
+
+- Container base images use version tags rather than digests
+  (`dotnet:10.0`, `node:22-alpine`, `nginx:alpine`, `python:3.12-slim`).
+- NuGet has no committed `packages.lock.json`; transitive packages resolve at
+  restore time.
+- Android Gradle/Maven dependencies resolve from Google Maven and Maven Central.
+  The Gradle wrapper is pinned at 8.14.3, but the Android Gradle Plugin, Kotlin
+  plugin, and BOM versions come from Expo 54 / React Native 0.81.
+- Ollama uses mutable registry tags (`ollama/ollama:0.40.8`,
+  `qwen2.5:1.5b`); the `ct-robot` model is deterministic only for a fixed
+  base-model digest and Modelfile.
+- FastEmbed downloads `BAAI/bge-small-en-v1.5` without a pinned Hugging Face
+  revision.
+- Debian/Ubuntu packages in images (`espeak-ng`, `python3`, `pip`) are not
+  version-pinned.
 - `ACU.FE` Playwright config starts the gateway through
   `e2e/scripts/start-gateway.ps1`, so the default `npm run test:e2e` path needs
   Windows + PowerShell + .NET SDK. On Linux, start the backend separately and
@@ -320,5 +448,10 @@ start re-downloads voices and the model.
 - `e2e/specs/live-workflow-simulator.spec.ts` expects
   `Source/acu/tests/simulator/RobotSimulator/RobotSimulator.csproj`, which is
   not present in this repository snapshot.
+- The Android APK build requires a local Android SDK, JDK 17, and Gradle; it is
+  not exercised by `npm ci`, and it was not built in the 2026-10-26 audit.
 - The `ai` profile has not been validated against the 4 GB target device
   storage budget.
+- A stricter rebuild should pin image digests, add NuGet lockfiles, pin the
+  Ollama base-model digest, and record the FastEmbed model revision. See
+  [`DEPENDENCIES.md`](DEPENDENCIES.md#known-pinning-gaps).

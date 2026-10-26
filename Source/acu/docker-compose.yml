@@ -1,3 +1,8 @@
+# Explicit project name so the locally built `acu-backend` image always
+# matches the `piper-model-init` service, regardless of the checkout directory
+# or the directory from which `docker compose` is invoked.
+name: acu
+
 services:
 
   backend:

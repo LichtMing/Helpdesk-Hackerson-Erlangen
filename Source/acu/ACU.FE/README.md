@@ -16,6 +16,20 @@ preview tab was removed; patient interaction happens on the robot screen.
 - **Offline-aware** — service worker (`public/sw.js`) precaches the app shell, uses network-first for `/api/*` (cached fallback when offline), and SWR for static assets.
 - **Healthineers-inspired theme** — design tokens in [`src/theme/tokens.css`](src/theme/tokens.css), supports light & dark.
 
+## Toolchain and dependencies
+
+- Node.js `22.20+` (verified with `22.22.3`) and npm `10.9.8`.
+- `package-lock.json` v3 is committed and is the authoritative dependency set:
+  165 lockfile entries, 4 runtime dependencies, and 11 development
+  dependencies.
+- Runtime: React `18.3.1`, React DOM `18.3.1`, axios `1.20.0`, and
+  react-icons `5.7.0`. The embedded Swagger UI package was removed because the
+  gateway serves Swagger at `/docs` and the operator UI never imported it.
+- Build and test: Vite `8.3.1`, TypeScript `5.9.3`, Vitest `5.0.2`,
+  Testing Library, jsdom `25.0.1`, and Playwright `1.63.0`.
+- The complete version table is in
+  [`docs/DEPENDENCIES.md`](../../../docs/DEPENDENCIES.md).
+
 ## Folder layout
 
 ```
@@ -78,15 +92,20 @@ npm run test:e2e     # Playwright (see limitations below)
 
 ## Local configuration
 
-Create `ACU.FE/.env` with:
+A portable template is committed as `.env.example`. Copy it to `.env` and set
+the gateway URL. For a gateway on the same machine:
 
 ```env
 VITE_API_BASE_URL=http://localhost:3000
 ```
 
-Leave `VITE_API_BASE_URL` empty for the Docker image; nginx then proxies `/api`
-to the `backend` service. See the [ACU solution README](../README.md) and the
-[repository README](../../../README.md) for the full end-to-end walkthrough.
+For a robot demo, use the ACU host's LAN address instead, for example
+`http://192.168.1.100:3000`. Leave `VITE_API_BASE_URL` empty for the Docker
+image; nginx then proxies `/api` to the `backend` service. See the
+[ACU solution README](../README.md), the
+[repository README](../../../README.md), and
+[`docs/REPRODUCIBILITY.md`](../../../docs/REPRODUCIBILITY.md) for the full
+end-to-end walkthrough.
 
 ## Docker deployment
 

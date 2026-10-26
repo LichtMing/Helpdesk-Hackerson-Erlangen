@@ -1,5 +1,69 @@
 # Changelog
 
+## 2026-10-26 — reproducibility and dependency audit
+
+### Documentation
+
+- Added [`DEPENDENCIES.md`](DEPENDENCIES.md): complete toolchain, container
+  image, NuGet, Python, npm, model, and voice inventory with resolved versions
+  and update commands.
+- Added [`SECURITY.md`](SECURITY.md): trust boundaries, data handling, signing
+  keys, and a deployment hardening checklist.
+- Added [`THIRD_PARTY.md`](THIRD_PARTY.md): third-party licence review
+  checklist.
+- Expanded the root README with a reproducibility verdict and dependency
+  summary.
+- Corrected the Silero VAD asset version in the reproducibility guide and robot
+  README (`v5.1.2` → `v6.2.0`).
+- Documented the current verification results and the remaining pinning gaps.
+
+### Dependency pinning
+
+- Added fully resolved Python lockfiles:
+  `helpdesk_api/requirements.lock` (Python 3.12, 18 packages),
+  `acu_standin/requirements.lock` (Python 3.10+, 19 packages),
+  `ai_engine/requirements.lock` (Python 3.10+, 34 packages), and
+  `Source/acu/ApiGateway/Tts/requirements-piper.lock` (Python 3.12, 7 packages).
+- Declared `pydantic` explicitly in the adapter and stand-in requirements.
+- Changed `ai_engine` from `numpy==2.5.4` to `numpy==2.2.6` so FastEmbed 0.9.0
+  installs on the documented Python 3.10 host.
+- Updated the helpdesk Dockerfile and backend Piper install to use lockfiles.
+- Added `eval/requirements.txt`.
+- Removed the unused `swagger-ui-react` and `@types/swagger-ui-react` frontend
+  dependencies. The UI never imported them, the gateway serves Swagger at
+  `/docs`, and the removal dropped 162 transitive packages plus the critical
+  DOMPurify advisory. The frontend lockfile now has 165 entries.
+
+### Configuration and build fixes
+
+- Replaced the machine-specific hostname in `ACU.FE/.env.example` and the
+  `deviceApi` comment with `http://localhost:3000`.
+- Corrected the Swagger UI documentation to `/docs`; the OpenAPI JSON remains at
+  `/swagger/v1/swagger.json`.
+- Fixed the Compose project name to `acu` so `piper-model-init` can always reuse
+  the locally built `acu-backend` image, even if the checkout directory is
+  renamed.
+- Made the legacy single-service Compose files functional and marked the root
+  `Source/acu/docker-compose.yml` as authoritative.
+- Included the helpdesk lockfile in the root `.dockerignore` build context.
+
+### Verification
+
+- Frontend: 49/49 tests and production build pass.
+- Robot: type check, 11/11 tests, and both model assets pass.
+- helpdesk: 4/4 tests with the Python 3.12 lockfile.
+- Stand-in: health, `run_eval.py` (15 questions), and `run_eval2.py`
+  (16 paraphrases) pass.
+- `ai_engine/test_embed.py` passes on Python 3.10 with the lockfile.
+- Piper lockfile imports successfully; a downloaded `en_US-lessac-medium` voice
+  passed MD5 verification and produced a valid 22,050 Hz mono 16-bit WAV.
+- `npm ci` completed for the robot app and removed stale extraneous packages.
+- `npm audit` snapshot (2026-10-26): frontend 5 advisories (2 moderate, 3 high,
+  no critical) after removing Swagger UI React; robot 12 advisories (5 moderate,
+  7 high, no critical), mostly Expo build tooling. See `docs/SECURITY.md`.
+- The Docker stack and Android APK were not re-built in this environment
+  because Docker and the Android SDK were unavailable.
+
 ## 2026-10-24 — final demo revision
 
 ### Operator frontend
